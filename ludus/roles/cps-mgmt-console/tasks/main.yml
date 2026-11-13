@@ -1,0 +1,114 @@
+---
+# cps-mgmt-console: Management console VM
+# Runs FastAPI backend + serves the ICS Detection Console frontend
+# SSH key-based auth to Historian, OPC UA srv, and NGFW
+
+- name: Install console dependencies
+  apt:
+    name:
+      - python3
+      - python3-pip
+      - python3-venv
+      - openssh-client
+    state: present
+    update_cache: true
+
+- name: Create console user
+  user:
+    name: "{{ console_user }}"
+    shell: /bin/bash
+    create_home: true
+
+- name: Ensure console .ssh directory exists
+  file:
+    path: "/home/{{ console_user }}/.ssh"
+    state: directory
+    owner: "{{ console_user }}"
+    group: "{{ console_user }}"
+    mode: '0700'
+
+# The lab uses a single pre-generated, DISPOSABLE keypair shipped with the
+# roles (ludus/keys + each role's files/). The console gets the private key;
+# the targets (cps-oida-ready, cps-ngfw-suricata) authorize the public key.
+# This avoids per-host fact passing and any VM provisioning-order problem.
+- name: Deploy console private key
+  copy:
+    src: cps_console_ed25519
+    dest: "/home/{{ console_user }}/.ssh/id_ed25519"
+    owner: "{{ console_user }}"
+    group: "{{ console_user }}"
+    mode: '0600'
+
+- name: Deploy console public key
+  copy:
+    src: cps_console_ed25519.pub
+    dest: "/home/{{ console_user }}/.ssh/id_ed25519.pub"
+    owner: "{{ console_user }}"
+    group: "{{ console_user }}"
+    mode: '0644'
+
+- name: Create SSH config for quick access
+  template:
+    src: ssh_config.j2
+    dest: "/home/{{ console_user }}/.ssh/config"
+    owner: "{{ console_user }}"
+    mode: '0600'
+
+- name: Create console application directory
+  file:
+    path: /opt/cps-console
+    state: directory
+    owner: "{{ console_user }}"
+
+- name: Create Python venv
+  command: python3 -m venv /opt/cps-console/venv
+  args:
+    creates: /opt/cps-console/venv/bin/activate
+  become: true
+  become_user: "{{ console_user }}"
+
+- name: Install Python dependencies
+  pip:
+    name:
+      - fastapi
+      - uvicorn[standard]
+      - asyncssh
+      - pyyaml
+    virtualenv: /opt/cps-console/venv
+  become: true
+  become_user: "{{ console_user }}"
+
+- name: Deploy backend application
+  copy:
+    src: app.py
+    dest: /opt/cps-console/app.py
+    owner: "{{ console_user }}"
+    mode: '0755'
+
+- name: Deploy SSH targets config
+  template:
+    src: targets.yml.j2
+    dest: /opt/cps-console/targets.yml
+    owner: "{{ console_user }}"
+    mode: '0600'
+
+- name: Deploy frontend HTML
+  copy:
+    src: ics-console.html
+    dest: /opt/cps-console/static/index.html
+    owner: "{{ console_user }}"
+
+- name: Deploy systemd unit
+  template:
+    src: cps-console.service.j2
+    dest: /etc/systemd/system/cps-console.service
+  notify:
+    - reload systemd
+    - restart console
+
+- name: Enable and start console
+  systemd:
+    name: cps-console
+    enabled: true
+    state: started
+    daemon_reload: true

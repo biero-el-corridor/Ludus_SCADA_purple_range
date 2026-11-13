@@ -1,0 +1,81 @@
+---
+# cps-s7comm: Mock S7comm server on PLC (port 102 via snap7)
+# Simulates a Siemens S7-300 CPU
+
+- name: Install S7comm server dependencies
+  apt:
+    name:
+      - python3
+      - python3-pip
+      - python3-venv
+      - build-essential
+    state: present
+    update_cache: true
+
+- name: Create S7comm server directory
+  file:
+    path: /opt/s7comm-server
+    state: directory
+
+- name: Create Python venv
+  command: python3 -m venv /opt/s7comm-server/venv
+  args:
+    creates: /opt/s7comm-server/venv/bin/activate
+
+- name: Install snap7 Python bindings
+  pip:
+    name: python-snap7
+    virtualenv: /opt/s7comm-server/venv
+
+- name: Install snap7 C library
+  apt:
+    name: libsnap7-1
+    state: present
+  ignore_errors: true
+
+- name: Build snap7 from source if package unavailable
+  block:
+    - name: Clone snap7
+      git:
+        repo: https://github.com/SCADACS/snap7.git
+        dest: /tmp/snap7
+        version: master
+    - name: Build snap7 library
+      make:
+        chdir: /tmp/snap7/build/unix
+        target: all
+        params:
+          LibInstall: /usr/lib
+    - name: Install snap7 library
+      command: make -f /tmp/snap7/build/unix/Makefile install
+    - name: ldconfig
+      command: ldconfig
+  when: false  # Enable if libsnap7-1 not in repos
+
+- name: Deploy S7comm mock server
+  template:
+    src: s7_server.py.j2
+    dest: /opt/s7comm-server/server.py
+    mode: '0755'
+
+- name: Deploy systemd unit
+  copy:
+    dest: /etc/systemd/system/s7comm-server.service
+    content: |
+      [Unit]
+      Description=Mock S7comm Server — PLC (Snap7)
+      After=network-online.target
+      [Service]
+      Type=simple
+      ExecStart=/opt/s7comm-server/venv/bin/python3 /opt/s7comm-server/server.py
+      Restart=on-failure
+      RestartSec=5
+      [Install]
+      WantedBy=multi-user.target
+
+- name: Enable and start S7comm server
+  systemd:
+    name: s7comm-server
+    enabled: true
+    state: started
+    daemon_reload: true

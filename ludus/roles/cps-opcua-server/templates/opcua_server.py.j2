@@ -1,0 +1,74 @@
+#!/usr/bin/env python3
+"""Mock OPC UA Server — CPS Lab (Shopfloor simulation)
+Namespace: {{ opcua_namespace }}
+Port: {{ opcua_port }}
+Security: None + Basic256Sha256 (anonymous allowed on None endpoint)
+"""
+import time, random, threading
+from opcua import Server, ua
+
+def update_values(variables):
+    """Simulate live process data updates"""
+    while True:
+        for var, base, delta in variables:
+            current = base + random.uniform(-delta, delta)
+            var.set_value(round(current, 2))
+        time.sleep(2)
+
+def main():
+    server = Server()
+    server.set_endpoint("opc.tcp://0.0.0.0:{{ opcua_port }}")
+    server.set_server_name("{{ opcua_server_name }}")
+
+    # Security: allow anonymous + None (intentionally insecure for workshop)
+    server.set_security_policy([
+        ua.SecurityPolicyType.NoSecurity,
+        ua.SecurityPolicyType.Basic256Sha256_Sign,
+        ua.SecurityPolicyType.Basic256Sha256_SignAndEncrypt,
+    ])
+
+    # Namespace
+    uri = "{{ opcua_namespace }}"
+    idx = server.register_namespace(uri)
+
+    # Shopfloor object hierarchy
+    shopfloor = server.nodes.objects.add_object(idx, "Shopfloor")
+
+    # Line A
+    line_a = shopfloor.add_object(idx, "Line_A")
+    temp_a = line_a.add_variable(idx, "Temperature", 24.0)
+    temp_a.set_writable()
+    pressure_a = line_a.add_variable(idx, "Pressure", 3.2)
+    pressure_a.set_writable()
+    motor_a = line_a.add_variable(idx, "Motor_RPM", 1450)
+    motor_a.set_writable()
+
+    # Line B
+    line_b = shopfloor.add_object(idx, "Line_B")
+    temp_b = line_b.add_variable(idx, "Temperature", 22.0)
+    temp_b.set_writable()
+    valve_b = line_b.add_variable(idx, "ValveState", True)
+    valve_b.set_writable()
+
+    server.start()
+    print(f"[+] OPC UA Server started on opc.tcp://0.0.0.0:{{ opcua_port }}")
+    print(f"[*] Namespace: {uri} (idx={idx})")
+
+    # Background value updates
+    sim_vars = [
+        (temp_a, 24.0, 2.0),
+        (pressure_a, 3.2, 0.3),
+        (motor_a, 1450, 50),
+        (temp_b, 22.0, 1.5),
+    ]
+    updater = threading.Thread(target=update_values, args=(sim_vars,), daemon=True)
+    updater.start()
+
+    try:
+        while True:
+            time.sleep(1)
+    finally:
+        server.stop()
+
+if __name__ == "__main__":
+    main()

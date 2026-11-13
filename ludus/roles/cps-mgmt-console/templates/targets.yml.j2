@@ -1,0 +1,20 @@
+# SSH targets for the FastAPI backend
+# Each target maps to a machine the console can SSH into
+
+historian:
+  host: "{{ ssh_targets.historian.host }}"
+  user: "{{ ssh_targets.historian.user }}"
+  port: {{ ssh_targets.historian.port }}
+  purpose: "Execute OIDA commands targeting L2 (OPC UA discovery, browse)"
+
+opcua_srv:
+  host: "{{ ssh_targets.opcua_srv.host }}"
+  user: "{{ ssh_targets.opcua_srv.user }}"
+  port: {{ ssh_targets.opcua_srv.port }}
+  purpose: "Execute OIDA commands targeting L1 (S7comm, Modbus)"
+
+ngfw:
+  host: "{{ ssh_targets.ngfw.host }}"
+  user: "{{ ssh_targets.ngfw.user }}"
+  port: {{ ssh_targets.ngfw.port }}
+  purpose: "Push Suricata rules, reload engine, tail logs"

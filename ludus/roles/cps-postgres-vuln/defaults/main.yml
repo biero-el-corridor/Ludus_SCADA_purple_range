@@ -1,0 +1,6 @@
+---
+pg_version: 15
+pg_listen_address: "0.0.0.0"
+pg_vuln_user: historian_app
+pg_vuln_password: historian2024
+pg_database: scada_logs

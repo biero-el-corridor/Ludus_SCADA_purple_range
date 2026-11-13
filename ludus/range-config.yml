@@ -1,0 +1,90 @@
+# yaml-language-server: $schema=https://docs.ludus.cloud/schemas/range-config.json
+# CPS Lab — 7 VMs — ICS/OT Cyber Range
+# NGFW central (routing + firewall + Suricata) — OIDA kill chain — v4
+
+network:
+  inter_vlan_default: REJECT
+  rules:
+    # L3 Supervision -> L2 Control (SSH pivot + OPC UA)
+    - { name: "L3 -> L2 ssh+opcua",  vlan_src: 30, vlan_dst: 20, protocol: tcp, ports: "22,4840", action: ACCEPT }
+    # L2 Control -> L1 Field (all ICS protocols). Ludus firewalls VLAN-to-VLAN,
+    # not per host, so this covers BOTH the OPC UA srv and the IHM (both on VLAN 20).
+    # Restricting the IHM alone to S7comm is therefore not possible at this layer;
+    # it is only a pedagogical nuance shown in the console interface.
+    - { name: "L2 -> L1 field",      vlan_src: 20, vlan_dst: 10, protocol: tcp, ports: "22,102,502,4840", action: ACCEPT }
+    # Management -> L3 (SSH for OIDA orchestration)
+    - { name: "mgmt -> L3",          vlan_src: 99, vlan_dst: 30, protocol: tcp, ports: "22", action: ACCEPT }
+    # Management -> L2 (SSH for OIDA orchestration)
+    - { name: "mgmt -> L2",          vlan_src: 99, vlan_dst: 20, protocol: tcp, ports: "22", action: ACCEPT }
+    # L3 -> L1 : not listed -> REJECT by default (segmentation gap)
+
+# NGFW = Ludus range router, customized to run Suricata
+router:
+  template: debian-12-x64-server-template
+  ram_gb: 4
+  cpus: 4
+  roles: [ cps-ngfw-suricata ]
+
+ludus:
+  # --- L3 Supervision (VLAN 30) ---
+  - vm_name: "{{ range_id }}-historian"
+    hostname: historian
+    template: debian-12-x64-server-template
+    vlan: 30
+    ip_last_octet: 10
+    ram_gb: 4
+    cpus: 2
+    linux: true
+    roles: [ cps-postgres-vuln, cps-oida-ready ]
+
+  - vm_name: "{{ range_id }}-ews"
+    hostname: ews
+    template: debian-12-x64-server-template
+    vlan: 30
+    ip_last_octet: 11
+    ram_gb: 2
+    cpus: 2
+    linux: true
+
+  # --- L2 Control (VLAN 20) ---
+  - vm_name: "{{ range_id }}-opcua-srv"
+    hostname: opcua-srv
+    template: debian-12-x64-server-template
+    vlan: 20
+    ip_last_octet: 10
+    ram_gb: 2
+    cpus: 2
+    linux: true
+    roles: [ cps-opcua-server, cps-ssh-lowpriv, cps-oida-ready ]
+
+  - vm_name: "{{ range_id }}-ihm"
+    hostname: ihm
+    template: debian-12-x64-server-template
+    vlan: 20
+    ip_last_octet: 11
+    ram_gb: 2
+    cpus: 2
+    linux: true
+    roles: [ cps-ihm-client ]
+
+  # --- L1 Field (VLAN 10) ---
+  - vm_name: "{{ range_id }}-plc"
+    hostname: plc
+    template: debian-12-x64-server-template
+    vlan: 10
+    ip_last_octet: 11
+    ram_gb: 2
+    cpus: 2
+    linux: true
+    roles: [ cps-modbus, cps-s7comm, cps-opcua-field ]
+
+  # --- Management (VLAN 99) ---
+  - vm_name: "{{ range_id }}-console"
+    hostname: console
+    template: debian-12-x64-server-template
+    vlan: 99
+    ip_last_octet: 10
+    ram_gb: 2
+    cpus: 2
+    linux: true
+    roles: [ cps-mgmt-console ]

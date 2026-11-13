@@ -1,0 +1,10 @@
+---
+- name: reload systemd
+  systemd:
+    daemon_reload: true
+
+- name: restart suricata instances
+  systemd:
+    name: "suricata-{{ item.name }}"
+    state: restarted
+  loop: "{{ suricata_interfaces }}"

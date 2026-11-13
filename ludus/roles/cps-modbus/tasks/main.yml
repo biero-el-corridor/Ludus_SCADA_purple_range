@@ -1,0 +1,55 @@
+---
+# cps-modbus: Mock Modbus TCP server on PLC (port 502)
+# Simulates coils and holding registers
+
+- name: Install Modbus server dependencies
+  apt:
+    name:
+      - python3
+      - python3-pip
+      - python3-venv
+    state: present
+    update_cache: true
+
+- name: Create Modbus server directory
+  file:
+    path: /opt/modbus-server
+    state: directory
+
+- name: Create Python venv
+  command: python3 -m venv /opt/modbus-server/venv
+  args:
+    creates: /opt/modbus-server/venv/bin/activate
+
+- name: Install pymodbus
+  pip:
+    name: pymodbus[serial]
+    virtualenv: /opt/modbus-server/venv
+
+- name: Deploy Modbus mock server
+  template:
+    src: modbus_server.py.j2
+    dest: /opt/modbus-server/server.py
+    mode: '0755'
+
+- name: Deploy systemd unit
+  copy:
+    dest: /etc/systemd/system/modbus-server.service
+    content: |
+      [Unit]
+      Description=Mock Modbus TCP Server — PLC
+      After=network-online.target
+      [Service]
+      Type=simple
+      ExecStart=/opt/modbus-server/venv/bin/python3 /opt/modbus-server/server.py
+      Restart=on-failure
+      RestartSec=5
+      [Install]
+      WantedBy=multi-user.target
+
+- name: Enable and start Modbus server
+  systemd:
+    name: modbus-server
+    enabled: true
+    state: started
+    daemon_reload: true

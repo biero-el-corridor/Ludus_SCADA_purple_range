@@ -1,0 +1,75 @@
+---
+# cps-postgres-vuln: PostgreSQL with pg_execute_server_program (vulnerable config)
+# Simulates a compromised Historian database
+
+- name: Install PostgreSQL
+  apt:
+    name:
+      - "postgresql-{{ pg_version }}"
+      - "postgresql-client-{{ pg_version }}"
+      - python3-psycopg2
+    state: present
+    update_cache: true
+
+- name: Configure PostgreSQL to listen on all interfaces
+  lineinfile:
+    path: "/etc/postgresql/{{ pg_version }}/main/postgresql.conf"
+    regexp: "^#?listen_addresses"
+    line: "listen_addresses = '{{ pg_listen_address }}'"
+  notify: restart postgresql
+
+- name: Allow connections from all VLANs (insecure — workshop only)
+  lineinfile:
+    path: "/etc/postgresql/{{ pg_version }}/main/pg_hba.conf"
+    line: "host all all 10.0.0.0/8 md5"
+  notify: restart postgresql
+
+- name: Ensure PostgreSQL is running
+  systemd:
+    name: postgresql
+    state: started
+    enabled: true
+
+- name: Create vulnerable database
+  become: true
+  become_user: postgres
+  community.postgresql.postgresql_db:
+    name: "{{ pg_database }}"
+    state: present
+
+- name: Create application user with SUPERUSER (vulnerable)
+  become: true
+  become_user: postgres
+  community.postgresql.postgresql_user:
+    name: "{{ pg_vuln_user }}"
+    password: "{{ pg_vuln_password }}"
+    db: "{{ pg_database }}"
+    role_attr_flags: SUPERUSER
+    state: present
+
+- name: Create sample SCADA logs table
+  become: true
+  become_user: postgres
+  community.postgresql.postgresql_query:
+    db: "{{ pg_database }}"
+    query: |
+      CREATE TABLE IF NOT EXISTS process_data (
+        id SERIAL PRIMARY KEY,
+        timestamp TIMESTAMPTZ DEFAULT NOW(),
+        tag_name VARCHAR(64),
+        value FLOAT,
+        quality VARCHAR(16) DEFAULT 'GOOD'
+      );
+      INSERT INTO process_data (tag_name, value)
+      SELECT 'Temperature_L1', 22.0 + random() * 5
+      FROM generate_series(1, 100)
+      WHERE NOT EXISTS (SELECT 1 FROM process_data);
+
+- name: Verify pg_execute_server_program capability
+  become: true
+  become_user: postgres
+  community.postgresql.postgresql_query:
+    db: "{{ pg_database }}"
+    query: "SELECT pg_has_role('{{ pg_vuln_user }}', 'pg_execute_server_program', 'USAGE');"
+  register: pg_exec_check
+  changed_when: false

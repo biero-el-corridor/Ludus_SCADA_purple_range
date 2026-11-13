@@ -1,0 +1,114 @@
+---
+# cps-ngfw-suricata: Install and configure Suricata on NGFW router
+# Two instances: S1 (eth0.30 L3↔L2) and S2 (eth0.10 L2↔L1)
+
+- name: Install Suricata and dependencies
+  apt:
+    name:
+      - suricata
+      - suricata-update
+      - jq
+    state: present
+    update_cache: true
+
+- name: Create management user for remote rule push
+  user:
+    name: "{{ suricata_mgmt_user }}"
+    shell: /bin/bash
+    groups: suricata
+    create_home: true
+
+- name: Deploy console SSH public key for management user
+  authorized_key:
+    user: "{{ suricata_mgmt_user }}"
+    key: "{{ lookup('file', 'cps_console_ed25519.pub') }}"
+    state: present
+
+- name: Allow suricata-mgmt to reload rules without password
+  copy:
+    dest: /etc/sudoers.d/suricata-mgmt
+    content: |
+      {{ suricata_mgmt_user }} ALL=(root) NOPASSWD: /usr/bin/suricatasc -c reload-rules *
+      {{ suricata_mgmt_user }} ALL=(root) NOPASSWD: /usr/bin/suricatasc -c ruleset-reload-rules *
+      {{ suricata_mgmt_user }} ALL=(root) NOPASSWD: /bin/systemctl restart suricata-*
+    mode: '0440'
+    validate: 'visudo -cf %s'
+
+- name: Create log directories for each probe
+  file:
+    path: "{{ item.log_dir }}"
+    state: directory
+    owner: suricata
+    group: suricata
+    mode: '0755'
+  loop: "{{ suricata_interfaces }}"
+
+- name: Create custom rules directory (writable by the mgmt user)
+  file:
+    path: "{{ suricata_rules_dir }}"
+    state: directory
+    owner: "{{ suricata_mgmt_user }}"
+    group: suricata
+    mode: '0775'
+
+- name: Initialize an empty custom rules file per probe
+  copy:
+    dest: "{{ suricata_rules_dir }}/custom_{{ item.name }}.rules"
+    content: "# Custom Suricata rules for probe {{ item.name }} — pushed from the management console\n"
+    owner: "{{ suricata_mgmt_user }}"
+    group: suricata
+    mode: '0664'
+    force: false
+  loop: "{{ suricata_interfaces }}"
+
+- name: Deploy Suricata config for each probe instance
+  template:
+    src: suricata-instance.yaml.j2
+    dest: "/etc/suricata/suricata-{{ item.name }}.yaml"
+    owner: root
+    group: suricata
+    mode: '0640'
+  loop: "{{ suricata_interfaces }}"
+  notify: restart suricata instances
+
+- name: Deploy systemd unit for each Suricata instance
+  template:
+    src: suricata-instance.service.j2
+    dest: "/etc/systemd/system/suricata-{{ item.name }}.service"
+  loop: "{{ suricata_interfaces }}"
+  notify:
+    - reload systemd
+    - restart suricata instances
+
+- name: Enable and start Suricata instances
+  systemd:
+    name: "suricata-{{ item.name }}"
+    enabled: true
+    state: started
+    daemon_reload: true
+  loop: "{{ suricata_interfaces }}"
+
+- name: Run suricata-update for ET Open + ICS rules
+  command: suricata-update --suricata-conf /etc/suricata/suricata-{{ suricata_interfaces[0].name }}.yaml
+  args:
+    creates: /var/lib/suricata/rules/suricata.rules
+  changed_when: false
+
+- name: Deploy rule reload helper script
+  template:
+    src: reload-rules.sh.j2
+    dest: /usr/local/bin/suricata-reload-rules
+    mode: '0755'
+
+# Optional IPS mode via NFQUEUE
+- name: Configure NFQUEUE for IPS mode
+  iptables:
+    chain: FORWARD
+    jump: NFQUEUE
+    queue_num: "{{ idx }}"
+    in_interface: "{{ item.iface }}"
+    comment: "Suricata IPS {{ item.name }}"
+  loop: "{{ suricata_interfaces }}"
+  loop_control:
+    index_var: idx
+  when: suricata_enable_ips | bool

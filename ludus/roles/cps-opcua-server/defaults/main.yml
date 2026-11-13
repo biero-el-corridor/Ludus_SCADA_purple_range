@@ -1,0 +1,4 @@
+---
+opcua_port: 4840
+opcua_server_name: "CPS-OPC-UA-Server"
+opcua_namespace: "urn:cps:shopfloor"

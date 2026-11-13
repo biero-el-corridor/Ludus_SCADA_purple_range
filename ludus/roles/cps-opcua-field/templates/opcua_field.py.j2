@@ -1,0 +1,50 @@
+#!/usr/bin/env python3
+"""OPC UA Field Server — PLC-level (port 4840)
+Raw I/O variables: digital inputs/outputs, analog sensors
+"""
+import time, random, threading
+from opcua import Server, ua
+
+def update(variables):
+    while True:
+        for var, base, delta in variables:
+            var.set_value(round(base + random.uniform(-delta, delta), 2))
+        time.sleep(1)
+
+def main():
+    server = Server()
+    server.set_endpoint("opc.tcp://0.0.0.0:4840")
+    server.set_server_name("PLC-Field-OPC-UA")
+    server.set_security_policy([ua.SecurityPolicyType.NoSecurity])
+
+    idx = server.register_namespace("urn:cps:plc:field")
+    io = server.nodes.objects.add_object(idx, "IO")
+
+    # Analog inputs
+    ai0 = io.add_variable(idx, "AI0_Temperature", 24.6)
+    ai1 = io.add_variable(idx, "AI1_Pressure", 3.2)
+    ai2 = io.add_variable(idx, "AI2_Flow", 12.5)
+
+    # Digital outputs (writable). Explicit numeric NodeIds so attack/recon
+    # tools can address them deterministically: ns=<idx>;i=2001..2003.
+    do0 = io.add_variable(ua.NodeId(2001, idx), "DO0_Pump", True)
+    do0.set_writable()
+    do1 = io.add_variable(ua.NodeId(2002, idx), "DO1_Valve", True)
+    do1.set_writable()
+    do2 = io.add_variable(ua.NodeId(2003, idx), "DO2_Heater", False)
+    do2.set_writable()
+
+    server.start()
+    print("[+] OPC UA Field Server on 0.0.0.0:4840")
+
+    sim = [(ai0, 24.6, 1.0), (ai1, 3.2, 0.2), (ai2, 12.5, 0.5)]
+    threading.Thread(target=update, args=(sim,), daemon=True).start()
+
+    try:
+        while True:
+            time.sleep(1)
+    finally:
+        server.stop()
+
+if __name__ == "__main__":
+    main()

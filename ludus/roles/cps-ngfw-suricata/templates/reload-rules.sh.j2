@@ -1,0 +1,16 @@
+#!/bin/bash
+# Reload Suricata rules on all probe instances
+# Called by the management console after pushing new rules
+
+set -euo pipefail
+
+{% for probe in suricata_interfaces %}
+RULES_FILE_{{ probe.name }}="{{ suricata_rules_dir }}/custom_{{ probe.name }}.rules"
+echo "[*] {{ probe.name }}: $RULES_FILE_{{ probe.name }} ($(grep -c '^alert\|^drop\|^reject' "$RULES_FILE_{{ probe.name }}" 2>/dev/null || echo 0) rules)"
+echo "[*] Reloading suricata-{{ probe.name }}..."
+suricatasc -c reload-rules /run/suricata-{{ probe.name }}.socket 2>/dev/null \
+  && echo "[+] suricata-{{ probe.name }}: rules reloaded" \
+  || { echo "[!] suricata-{{ probe.name }}: reload failed, restarting..."; systemctl restart suricata-{{ probe.name }}; }
+{% endfor %}
+
+echo "[+] All probes reloaded"

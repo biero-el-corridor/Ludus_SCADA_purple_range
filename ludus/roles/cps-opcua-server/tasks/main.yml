@@ -1,0 +1,52 @@
+---
+# cps-opcua-server: Mock OPC UA server simulating a SCADA gateway
+# Exposes process variables readable/writable from L3 and L1
+
+- name: Install OPC UA server dependencies
+  apt:
+    name:
+      - python3
+      - python3-pip
+      - python3-venv
+    state: present
+    update_cache: true
+
+- name: Create OPC UA server directory
+  file:
+    path: /opt/opcua-server
+    state: directory
+    mode: '0755'
+
+- name: Create Python venv
+  command: python3 -m venv /opt/opcua-server/venv
+  args:
+    creates: /opt/opcua-server/venv/bin/activate
+
+- name: Install opcua library
+  pip:
+    name:
+      - opcua
+      - cryptography
+    virtualenv: /opt/opcua-server/venv
+
+- name: Deploy OPC UA mock server script
+  template:
+    src: opcua_server.py.j2
+    dest: /opt/opcua-server/server.py
+    mode: '0755'
+  notify: restart opcua-server
+
+- name: Deploy systemd unit
+  template:
+    src: opcua-server.service.j2
+    dest: /etc/systemd/system/opcua-server.service
+  notify:
+    - reload systemd
+    - restart opcua-server
+
+- name: Enable and start OPC UA server
+  systemd:
+    name: opcua-server
+    enabled: true
+    state: started
+    daemon_reload: true

@@ -1,0 +1,24 @@
+---
+console_port: 8080
+console_user: console
+
+# Second octet of the range. Ludus assigns it per range (scheme is
+# 10.<range>.<vlan>.<ip_last_octet>). We prefer the Ludus-provided
+# range_second_octet, but fall back to the console VM's OWN assigned 10.x
+# address so the targets are correct for ANY range number, never a guess.
+range_octet: "{{ range_second_octet | default(ansible_default_ipv4.address.split('.')[1]) }}"
+
+# SSH targets (derived from the range's own addressing)
+ssh_targets:
+  historian:
+    host: "10.{{ range_octet }}.30.10"
+    user: oida-runner
+    port: 22
+  opcua_srv:
+    host: "10.{{ range_octet }}.20.10"
+    user: oida-runner
+    port: 22
+  ngfw:
+    host: "10.{{ range_octet }}.30.254"
+    user: suricata-mgmt
+    port: 22

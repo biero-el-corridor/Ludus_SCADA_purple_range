@@ -1,0 +1,23 @@
+---
+# cps-ssh-lowpriv: Create a low-privilege SSH user for lateral movement
+# Applied to: OPC UA srv (pivot target from Historian)
+
+- name: Create low-privilege user
+  user:
+    name: "{{ lowpriv_user | default('lowpriv') }}"
+    password: "{{ lowpriv_password | default('lowpriv2024') | password_hash('sha512') }}"
+    shell: /bin/bash
+    create_home: true
+    groups: []
+
+- name: Ensure SSH password auth is enabled (intentionally weak)
+  lineinfile:
+    path: /etc/ssh/sshd_config
+    regexp: "^#?PasswordAuthentication"
+    line: "PasswordAuthentication yes"
+  notify: restart sshd
+
+# NOTE: we deliberately do NOT set "AllowUsers" here.
+# Restricting AllowUsers can lock out the Ludus provisioning account on the
+# next deploy. The intended weakness for the pivot scenario is password auth
+# plus a weak account (lowpriv), not an SSH allow-list.

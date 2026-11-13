@@ -1,0 +1,16 @@
+[Unit]
+Description=CPS Management Console — FastAPI + ICS Detection Interface
+After=network-online.target
+
+[Service]
+Type=simple
+User={{ console_user }}
+WorkingDirectory=/opt/cps-console
+ExecStart=/opt/cps-console/venv/bin/uvicorn app:app --host 0.0.0.0 --port {{ console_port }}
+Restart=on-failure
+RestartSec=5
+Environment=TARGETS_FILE=/opt/cps-console/targets.yml
+Environment=SSH_KEY=/home/{{ console_user }}/.ssh/id_ed25519
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,45 @@
+---
+# cps-opcua-field: OPC UA server on PLC (field level, port 4840)
+# Lighter than the L2 OPC UA server — exposes raw I/O variables
+
+- name: Create OPC UA field directory
+  file:
+    path: /opt/opcua-field
+    state: directory
+
+- name: Create Python venv
+  command: python3 -m venv /opt/opcua-field/venv
+  args:
+    creates: /opt/opcua-field/venv/bin/activate
+
+- name: Install opcua
+  pip:
+    name: opcua
+    virtualenv: /opt/opcua-field/venv
+
+- name: Deploy OPC UA field server
+  template:
+    src: opcua_field.py.j2
+    dest: /opt/opcua-field/server.py
+    mode: '0755'
+
+- name: Deploy systemd unit
+  copy:
+    dest: /etc/systemd/system/opcua-field.service
+    content: |
+      [Unit]
+      Description=OPC UA Field Server — PLC
+      After=network-online.target
+      [Service]
+      Type=simple
+      ExecStart=/opt/opcua-field/venv/bin/python3 /opt/opcua-field/server.py
+      Restart=on-failure
+      [Install]
+      WantedBy=multi-user.target
+
+- name: Enable and start
+  systemd:
+    name: opcua-field
+    enabled: true
+    state: started
+    daemon_reload: true

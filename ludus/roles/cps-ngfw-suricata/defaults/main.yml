@@ -1,0 +1,17 @@
+---
+# Suricata config for NGFW
+suricata_interfaces:
+  - name: s1
+    iface: eth0.30
+    description: "L3 <-> L2 (Supervision to Control)"
+    log_dir: /var/log/suricata/s1
+  - name: s2
+    iface: eth0.10
+    description: "L2 <-> L1 (Control to Field)"
+    log_dir: /var/log/suricata/s2
+
+suricata_rules_dir: /etc/suricata/rules
+# Custom rules are one file per probe: custom_s1.rules, custom_s2.rules
+# (names derived from suricata_interfaces[].name). The console writes these.
+suricata_mgmt_user: suricata-mgmt
+suricata_enable_ips: false  # IDS by default; set true for NFQUEUE IPS mode

@@ -1,0 +1,50 @@
+#!/usr/bin/env python3
+"""Mock Modbus TCP Server — PLC simulation (port 502)
+Exposes: 16 coils, 16 discrete inputs, 100 holding registers, 100 input registers
+"""
+import logging, asyncio
+from pymodbus.server import StartAsyncTcpServer
+from pymodbus.datastore import (
+    ModbusSequentialDataBlock, ModbusSlaveContext, ModbusServerContext
+)
+
+logging.basicConfig(level=logging.INFO)
+log = logging.getLogger("modbus-plc")
+
+def create_context():
+    # Initial values simulating a running process
+    coils = [False] * 16  # digital outputs
+    coils[0] = True   # pump ON
+    coils[1] = True   # valve OPEN
+
+    di = [False] * 16  # discrete inputs (sensors)
+    di[0] = True  # limit switch active
+
+    hr = [0] * 100  # holding registers
+    hr[0] = 246  # temperature x10 (24.6°C)
+    hr[1] = 1450  # motor RPM
+    hr[2] = 320  # pressure x100 (3.20 bar)
+    hr[3] = 50  # setpoint %
+
+    ir = [0] * 100  # input registers (read-only sensors)
+    ir[0] = 245
+    ir[1] = 1448
+
+    store = ModbusSlaveContext(
+        co=ModbusSequentialDataBlock(0, coils),
+        di=ModbusSequentialDataBlock(0, di),
+        hr=ModbusSequentialDataBlock(0, hr),
+        ir=ModbusSequentialDataBlock(0, ir),
+    )
+    return ModbusServerContext(slaves=store, single=True)
+
+async def main():
+    context = create_context()
+    log.info("[+] Modbus TCP Server starting on 0.0.0.0:502")
+    await StartAsyncTcpServer(
+        context=context,
+        address=("0.0.0.0", 502),
+    )
+
+if __name__ == "__main__":
+    asyncio.run(main())

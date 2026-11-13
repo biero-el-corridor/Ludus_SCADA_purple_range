@@ -1,0 +1,58 @@
+#!/usr/bin/env python3
+"""Mock S7comm Server — Simulates Siemens S7-300 CPU 315-2 PN/DP (port 102)
+Uses snap7 server library to handle S7comm protocol natively.
+"""
+import ctypes, time, snap7
+
+def main():
+    server = snap7.server.Server()
+
+    # Register data areas
+    # DB1: process data (100 bytes)
+    db1 = (ctypes.c_ubyte * 100)()
+    # Initial values: temperature = 24.6 (IEEE754 float at offset 0)
+    import struct
+    struct.pack_into('>f', db1, 0, 24.6)   # Temperature
+    struct.pack_into('>f', db1, 4, 3.2)    # Pressure
+    struct.pack_into('>i', db1, 8, 1450)   # Motor RPM
+    server.register_area(snap7.types.srvAreaDB, 1, db1)
+
+    # DB2: setpoints (100 bytes)
+    db2 = (ctypes.c_ubyte * 100)()
+    struct.pack_into('>f', db2, 0, 25.0)   # Temp setpoint
+    server.register_area(snap7.types.srvAreaDB, 2, db2)
+
+    # DB10: alarm log (256 bytes)
+    db10 = (ctypes.c_ubyte * 256)()
+    server.register_area(snap7.types.srvAreaDB, 10, db10)
+
+    # DB100: config (64 bytes)
+    db100 = (ctypes.c_ubyte * 64)()
+    server.register_area(snap7.types.srvAreaDB, 100, db100)
+
+    # Merkers area (64 bytes)
+    mk = (ctypes.c_ubyte * 64)()
+    server.register_area(snap7.types.srvAreaMK, 0, mk)
+
+    # Start server on port 102
+    server.start(tcpport=102)
+    print("[+] S7comm Server started on 0.0.0.0:102")
+    print("[*] Module: CPU 315-2 PN/DP | Plant: Shopfloor-Line-A")
+    print("[*] DB1: process data | DB2: setpoints | DB10: alarms | DB100: config")
+
+    try:
+        while True:
+            # Simulate value drift
+            current_temp = struct.unpack_from('>f', db1, 0)[0]
+            import random
+            new_temp = current_temp + random.uniform(-0.3, 0.3)
+            struct.pack_into('>f', db1, 0, round(new_temp, 2))
+            time.sleep(2)
+    except KeyboardInterrupt:
+        pass
+    finally:
+        server.stop()
+        server.destroy()
+
+if __name__ == "__main__":
+    main()

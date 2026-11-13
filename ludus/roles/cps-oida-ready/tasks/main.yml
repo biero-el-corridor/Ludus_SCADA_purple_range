@@ -1,0 +1,77 @@
+---
+# cps-oida-ready: Prepare a VM to run OIDA commands (piloted from Console)
+# Applied to: Historian, OPC UA srv
+
+- name: Install OIDA dependencies
+  apt:
+    name:
+      - python3
+      - python3-pip
+      - python3-venv
+      - nmap
+      - net-tools
+    state: present
+    update_cache: true
+
+- name: Install snap7 native library (needed by python-snap7 for S7comm)
+  apt:
+    name: libsnap7-1
+    state: present
+  ignore_errors: true
+
+- name: Create OIDA runner user
+  user:
+    name: "{{ oida_user }}"
+    shell: /bin/bash
+    create_home: true
+    groups: []
+
+- name: Deploy console SSH public key for OIDA runner
+  authorized_key:
+    user: "{{ oida_user }}"
+    key: "{{ lookup('file', 'cps_console_ed25519.pub') }}"
+    state: present
+
+- name: Create OIDA install directory
+  file:
+    path: "{{ oida_install_dir }}"
+    state: directory
+    owner: "{{ oida_user }}"
+    group: "{{ oida_user }}"
+    mode: '0755'
+
+- name: Create Python venv for OIDA
+  command: python3 -m venv {{ oida_install_dir }}/venv
+  args:
+    creates: "{{ oida_install_dir }}/venv/bin/activate"
+  become: true
+  become_user: "{{ oida_user }}"
+
+- name: Install OIDA and ICS protocol libraries
+  pip:
+    name:
+      - "oida-ics[all]"   # the real OIDA framework (getoida.dev, f0rw4rd/oida)
+      - python-snap7
+      - opcua
+      - pymodbus
+      - cryptography
+    virtualenv: "{{ oida_install_dir }}/venv"
+  become: true
+  become_user: "{{ oida_user }}"
+
+# Wrapper so `oida ...` works from any shell / over SSH without activating
+# the venv by hand. The real `oida` entrypoint lives in the venv bin dir.
+- name: Create OIDA wrapper script
+  copy:
+    dest: /usr/local/bin/oida
+    content: |
+      #!/bin/bash
+      exec {{ oida_install_dir }}/venv/bin/oida "$@"
+    mode: '0755'
+
+- name: Ensure oida-runner can use raw sockets (for network scanning)
+  capabilities:
+    path: /usr/bin/nmap
+    capability: cap_net_raw+ep
+    state: present
+  ignore_errors: true

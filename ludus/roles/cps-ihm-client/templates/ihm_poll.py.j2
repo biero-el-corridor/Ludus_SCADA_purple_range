@@ -1,0 +1,50 @@
+#!/usr/bin/env python3
+"""IHM Polling Client — reads OPC UA (L2 server) + S7comm (L1 PLC)
+Generates normal background traffic on VLAN 20 and cross-VLAN to VLAN 10
+"""
+import time, logging
+
+logging.basicConfig(level=logging.INFO, format='%(asctime)s [IHM] %(message)s')
+log = logging.getLogger("ihm")
+
+# OPC UA polling (to OPC UA srv on 10.x.20.10:4840)
+def poll_opcua():
+    try:
+        from opcua import Client
+        client = Client("opc.tcp://10.{{ range_second_octet | default(ansible_default_ipv4.address.split('.')[1]) }}.20.10:4840")
+        client.connect()
+        root = client.get_root_node()
+        objects = client.get_objects_node()
+        # Browse shopfloor
+        shopfloor = objects.get_child(["2:Shopfloor", "2:Line_A"])
+        temp = shopfloor.get_child("2:Temperature")
+        val = temp.get_value()
+        log.info(f"OPC UA — Line_A/Temperature = {val}")
+        client.disconnect()
+    except Exception as e:
+        log.warning(f"OPC UA poll failed: {e}")
+
+# S7comm polling (to PLC on 10.x.10.11:102)
+def poll_s7():
+    try:
+        import snap7
+        client = snap7.client.Client()
+        client.connect("10.{{ range_second_octet | default(ansible_default_ipv4.address.split('.')[1]) }}.10.11", 0, 1, 102)
+        # Read DB1 offset 0, 4 bytes (temperature as float)
+        data = client.db_read(1, 0, 4)
+        import struct
+        temp = struct.unpack('>f', data)[0]
+        log.info(f"S7comm — DB1.DBD0 (Temp) = {round(temp, 2)}")
+        client.disconnect()
+    except Exception as e:
+        log.warning(f"S7comm poll failed: {e}")
+
+def main():
+    log.info("[+] IHM client started — polling every 10s")
+    while True:
+        poll_opcua()
+        poll_s7()
+        time.sleep(10)
+
+if __name__ == "__main__":
+    main()

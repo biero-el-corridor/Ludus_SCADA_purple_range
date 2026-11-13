@@ -1,0 +1,78 @@
+%YAML 1.1
+---
+# Suricata config for probe {{ item.name }} on {{ item.iface }}
+# {{ item.description }}
+
+vars:
+  address-groups:
+    HOME_NET: "[10.0.0.0/8]"
+    EXTERNAL_NET: "!$HOME_NET"
+    ICS_NET: "[10.0.0.0/8]"
+
+  port-groups:
+    MODBUS_PORT: "502"
+    S7COMM_PORT: "102"
+    OPCUA_PORT: "4840"
+
+default-log-dir: {{ item.log_dir }}
+
+# Dedicated command socket per instance so `suricatasc -c reload-rules`
+# can hot-reload rules without restarting the engine. Without distinct
+# filenames the two instances would collide on the default socket.
+unix-command:
+  enabled: true
+  filename: /run/suricata-{{ item.name }}.socket
+
+stats:
+  enabled: true
+  interval: 30
+
+outputs:
+  - fast:
+      enabled: true
+      filename: fast.log
+      append: true
+
+  - eve-log:
+      enabled: true
+      filename: eve.json
+      types:
+        - alert:
+            tagged-packets: true
+        - stats:
+            totals: true
+            threads: false
+
+af-packet:
+  - interface: {{ item.iface }}
+    threads: auto
+    cluster-id: {{ loop.index0 + 80 }}
+    cluster-type: cluster_flow
+    defrag: true
+    use-mmap: true
+    ring-size: 2048
+
+default-rule-path: /var/lib/suricata/rules
+
+rule-files:
+  - suricata.rules
+  # One custom file per probe. The management console writes exactly this
+  # path (custom_s1.rules / custom_s2.rules), so what is pushed is loaded.
+  - {{ suricata_rules_dir }}/custom_{{ item.name }}.rules
+
+app-layer:
+  protocols:
+    modbus:
+      enabled: true
+      detection-ports:
+        dp: 502
+    dnp3:
+      enabled: true
+      detection-ports:
+        dp: 20000
+    http:
+      enabled: true
+    tls:
+      enabled: true
+    ssh:
+      enabled: true

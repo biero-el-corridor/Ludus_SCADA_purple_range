@@ -1,0 +1,63 @@
+---
+# cps-ihm-client: IHM polling client (OPC UA + S7comm)
+# Simulates a human-machine interface consuming data from L1/L2
+
+- name: Install IHM dependencies
+  apt:
+    name:
+      - python3
+      - python3-pip
+      - python3-venv
+    state: present
+    update_cache: true
+
+- name: Install snap7 native library (needed by python-snap7)
+  apt:
+    name: libsnap7-1
+    state: present
+  ignore_errors: true
+
+- name: Create IHM directory
+  file:
+    path: /opt/ihm-client
+    state: directory
+
+- name: Create Python venv
+  command: python3 -m venv /opt/ihm-client/venv
+  args:
+    creates: /opt/ihm-client/venv/bin/activate
+
+- name: Install IHM client libraries
+  pip:
+    name:
+      - opcua
+      - python-snap7
+    virtualenv: /opt/ihm-client/venv
+
+- name: Deploy IHM polling script
+  template:
+    src: ihm_poll.py.j2
+    dest: /opt/ihm-client/poll.py
+    mode: '0755'
+
+- name: Deploy systemd unit
+  copy:
+    dest: /etc/systemd/system/ihm-client.service
+    content: |
+      [Unit]
+      Description=IHM Polling Client — OPC UA + S7comm
+      After=network-online.target
+      [Service]
+      Type=simple
+      ExecStart=/opt/ihm-client/venv/bin/python3 /opt/ihm-client/poll.py
+      Restart=on-failure
+      RestartSec=10
+      [Install]
+      WantedBy=multi-user.target
+
+- name: Enable and start IHM client
+  systemd:
+    name: ihm-client
+    enabled: true
+    state: started
+    daemon_reload: true
