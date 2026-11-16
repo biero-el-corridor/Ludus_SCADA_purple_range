@@ -1,6 +1,11 @@
 ---
 # cps-oida-ready: Prepare a VM to run OIDA commands (piloted from Console)
 # Applied to: Historian, OPC UA srv
+# Fixes:
+#   - removed bogus 'libsnap7-1' apt task (python-snap7>=1.3,<2.0 bundles libsnap7)
+#   - removed become_user on venv/pip: Ansible connects as root and an
+#     unprivileged become user cannot reach /root/.ansible/tmp (MODULE FAILURE).
+#     Running these as root is fine; the venv stays world-readable/executable.
 
 - name: Install OIDA dependencies
   apt:
@@ -12,12 +17,6 @@
       - net-tools
     state: present
     update_cache: true
-
-- name: Install snap7 native library (needed by python-snap7 for S7comm)
-  apt:
-    name: libsnap7-1
-    state: present
-  ignore_errors: true
 
 - name: Create OIDA runner user
   user:
@@ -44,23 +43,17 @@
   command: python3 -m venv {{ oida_install_dir }}/venv
   args:
     creates: "{{ oida_install_dir }}/venv/bin/activate"
-  become: true
-  become_user: "{{ oida_user }}"
 
 - name: Install OIDA and ICS protocol libraries
   pip:
     name:
-      - "oida-ics[all]"   # the real OIDA framework (getoida.dev, f0rw4rd/oida)
-      - python-snap7
+      - "oida-ics[all]"
+      - "python-snap7>=1.3,<2.0"
       - opcua
       - pymodbus
       - cryptography
     virtualenv: "{{ oida_install_dir }}/venv"
-  become: true
-  become_user: "{{ oida_user }}"
 
-# Wrapper so `oida ...` works from any shell / over SSH without activating
-# the venv by hand. The real `oida` entrypoint lives in the venv bin dir.
 - name: Create OIDA wrapper script
   copy:
     dest: /usr/local/bin/oida

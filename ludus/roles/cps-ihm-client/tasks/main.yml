@@ -1,6 +1,8 @@
 ---
 # cps-ihm-client: IHM polling client (OPC UA + S7comm)
 # Simulates a human-machine interface consuming data from L1/L2
+# NOTE: python-snap7 >= 1.3 bundles libsnap7 in its wheel; no system
+#       'libsnap7-1' package is required (it is not in the Debian repos).
 
 - name: Install IHM dependencies
   apt:
@@ -10,12 +12,6 @@
       - python3-venv
     state: present
     update_cache: true
-
-- name: Install snap7 native library (needed by python-snap7)
-  apt:
-    name: libsnap7-1
-    state: present
-  ignore_errors: true
 
 - name: Create IHM directory
   file:
@@ -31,7 +27,7 @@
   pip:
     name:
       - opcua
-      - python-snap7
+      - "python-snap7>=1.3,<2.0"
     virtualenv: /opt/ihm-client/venv
 
 - name: Deploy IHM polling script

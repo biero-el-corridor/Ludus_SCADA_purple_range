@@ -65,7 +65,6 @@
   args:
     creates: /opt/cps-console/venv/bin/activate
   become: true
-  become_user: "{{ console_user }}"
 
 - name: Install Python dependencies
   pip:
@@ -76,7 +75,6 @@
       - pyyaml
     virtualenv: /opt/cps-console/venv
   become: true
-  become_user: "{{ console_user }}"
 
 - name: Deploy backend application
   copy:
@@ -91,6 +89,12 @@
     dest: /opt/cps-console/targets.yml
     owner: "{{ console_user }}"
     mode: '0600'
+
+- name: Create static directory
+  file:
+    path: /opt/cps-console/static
+    state: directory
+    owner: "{{ console_user }}"
 
 - name: Deploy frontend HTML
   copy:

