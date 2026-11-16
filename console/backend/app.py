@@ -25,6 +25,7 @@ from pathlib import Path
 from typing import Optional
 
 import asyncssh
+import base64
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect, HTTPException
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
@@ -171,10 +172,18 @@ async def push_rules(req: RulesRequest):
 
     # Write rules to NGFW. The suricata-mgmt user owns the rules files
     # (see cps-ngfw-suricata role), so no sudo is needed here — only the
-    # reload below is privileged. Use `tee -a` for a real append.
+    # reload below is privileged.
+    #
+    # The rule text is base64-encoded in Python and decoded on the NGFW with
+    # `base64 -d`. We do NOT interpolate the raw rules into `echo '...'`:
+    # Debian's /bin/sh is dash, whose builtin echo interprets backslash escapes
+    # and silently corrupts multi-line rules (S7 rules use trailing-backslash
+    # line continuations). base64 is pure [A-Za-z0-9+/=] on a single line, so
+    # the shell cannot mangle it, and `base64 -d` restores the exact bytes.
     tee_flag = "-a" if req.append else ""
-    escaped_rules = req.rules.replace("'", "'\\''")
-    write_cmd = f"echo '{escaped_rules}' | tee {tee_flag} {rules_file} > /dev/null"
+    payload = req.rules if req.rules.endswith("\n") else req.rules + "\n"
+    b64 = base64.b64encode(payload.encode("utf-8")).decode("ascii")
+    write_cmd = f"echo '{b64}' | base64 -d | tee {tee_flag} {rules_file} > /dev/null"
 
     output, code = await ssh_exec("ngfw", write_cmd)
     if code != 0:
