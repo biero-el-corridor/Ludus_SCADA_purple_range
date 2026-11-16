@@ -23,7 +23,8 @@
 
 - name: Install pymodbus
   pip:
-    name: pymodbus[serial]
+    # pymodbus 3.9 renamed ModbusSlaveContext -> ModbusDeviceContext, breaking the mock server. Pin < 3.9.
+    name: "pymodbus[serial]<3.9"
     virtualenv: /opt/modbus-server/venv
 
 - name: Deploy Modbus mock server

@@ -2,14 +2,38 @@
 # cps-ngfw-suricata: Install and configure Suricata on NGFW router
 # Two instances: S1 (eth0.30 L3↔L2) and S2 (eth0.10 L2↔L1)
 
-- name: Install Suricata and dependencies
+# Suricata was removed from Debian bookworm main; it lives in bookworm-backports.
+- name: Enable bookworm-backports repository
+  apt_repository:
+    repo: "deb http://deb.debian.org/debian bookworm-backports main"
+    filename: bookworm-backports
+    state: present
+    update_cache: true
+
+- name: Install Suricata and dependencies (from backports)
   apt:
     name:
       - suricata
       - suricata-update
       - jq
     state: present
+    default_release: bookworm-backports
     update_cache: true
+
+# The backports package does not always create the suricata group/user; make sure they exist
+# before any task references `group: suricata`.
+- name: Ensure suricata system group exists
+  group:
+    name: suricata
+    system: true
+
+- name: Ensure suricata system user exists
+  user:
+    name: suricata
+    group: suricata
+    system: true
+    shell: /usr/sbin/nologin
+    create_home: false
 
 - name: Create management user for remote rule push
   user:

@@ -46,7 +46,7 @@ outputs:
 af-packet:
   - interface: {{ item.iface }}
     threads: auto
-    cluster-id: {{ loop.index0 + 80 }}
+    cluster-id: {{ item.cluster_id }}
     cluster-type: cluster_flow
     defrag: true
     use-mmap: true

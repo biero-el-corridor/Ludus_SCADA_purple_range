@@ -2,13 +2,15 @@
 # Suricata config for NGFW
 suricata_interfaces:
   - name: s1
-    iface: eth0.30
+    iface: ens19          # L3 NIC on the central router (was eth0.30; Ludus gives separate NICs, not VLAN subifs)
     description: "L3 <-> L2 (Supervision to Control)"
     log_dir: /var/log/suricata/s1
+    cluster_id: 80        # af-packet cluster-id, must be unique per instance
   - name: s2
-    iface: eth0.10
+    iface: ens21          # L1 NIC on the central router (was eth0.10)
     description: "L2 <-> L1 (Control to Field)"
     log_dir: /var/log/suricata/s2
+    cluster_id: 81
 
 suricata_rules_dir: /etc/suricata/rules
 # Custom rules are one file per probe: custom_s1.rules, custom_s2.rules

@@ -266,6 +266,11 @@ OIDA v0.4.2 — OT/ICS Dynamic Assessment Framework
 Waiting for command...</span></div>
     </div>
     <div class="run-bar">
+      <label style="color:var(--fg-dim);font-size:12px;margin-right:6px;">Attack source:</label>
+      <select id="atk-source" style="background:var(--bg);color:var(--fg);border:1px solid var(--border);border-radius:4px;padding:4px 8px;margin-right:10px;">
+        <option value="historian">Historian (L3)</option>
+        <option value="opcua_srv">OPC UA srv (L2)</option>
+      </select>
       <button class="btn-run red" id="btn-launch" disabled onclick="launchAttack()">Select an attack</button>
     </div>
   </div>
@@ -582,8 +587,13 @@ function setMode(connected, status) {
   if (connected && status) {
     if (status.range_octet) RANGE_OCTET = status.range_octet;
     console.log('Backend status:', status, 'range octet:', RANGE_OCTET);
+    // Ouvre les flux fast.log réels des deux sondes (détection pilotée par le trafic).
+    connectLogStream('s1');
+    connectLogStream('s2');
   } else {
     RANGE_OCTET = 'x';
+    Object.values(logWebSockets).forEach(ws => { try { ws && ws.close(); } catch {} });
+    logWebSockets = {};
   }
 }
 
@@ -627,6 +637,9 @@ function selectAttack(id) {
   btn.disabled = false;
   const atk = ATTACKS.find(a => a.id === id);
   btn.textContent = `Execute: ${atk.name}`;
+  // Pré-sélectionne la source "logique" de l'attaque — modifiable pour tester la segmentation
+  // (ex. lancer une attaque L1 depuis l'Historian L3 : elle doit échouer / rien renvoyer).
+  if (atk.target) document.getElementById('atk-source').value = atk.target;
 }
 
 
@@ -639,94 +652,55 @@ async function launchAttack() {
   btn.textContent = 'Running...';
 
   const atk = ATTACKS.find(a => a.id === selectedAttack);
-  const sig = SIGNATURES[selectedAttack];
+  const source = document.getElementById('atk-source').value;  // 'historian' | 'opcua_srv'
 
   if (connectedMode) {
-    await launchConnected(atk, sig);
+    await launchConnected(atk, source);
   } else {
-    await launchDemo(atk, sig);
+    const term = document.getElementById('oida-term');
+    term.innerHTML += `\n<span class="warn">[!] Backend non connecté — pas d'exécution réelle, rien à afficher.</span>\n`;
+    term.scrollTop = term.scrollHeight;
   }
+
+  attackRunning = false;
+  btn.disabled = false;
+  btn.textContent = `Execute: ${atk.name}`;
 }
 
-// Connected mode: real SSH execution
-async function launchConnected(atk, sig) {
+// Connected mode: real SSH execution — shows ONLY the real result, nothing fabricated.
+async function launchConnected(atk, source) {
   const term = document.getElementById('oida-term');
-  const cmd = resolveIps(atk.cmd);   // '10.1.' -> real range octet
-  term.innerHTML += `\n<span class="cmd">$ ${cmd}</span>\n`;
-  term.innerHTML += `<span class="dim">[*] Executing on ${atk.target} via SSH...</span>\n`;
+  const cmd = resolveIps(atk.cmd);
+  term.innerHTML += `\n<span class="cmd">[${source}] $ ${cmd}</span>\n`;
   term.scrollTop = term.scrollHeight;
 
   try {
     const r = await fetch(API_BASE + '/api/oida/execute', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ target: atk.target, command: cmd }),
+      body: JSON.stringify({ target: source, command: cmd }),
     });
     const data = await r.json();
-
-    term.innerHTML += `<span class="${data.status === 'success' ? 'ok' : 'warn'}">${escapeHtml(data.output)}</span>\n`;
+    const out = (data.output || '').trim();
+    if (out) {
+      term.innerHTML += `<span class="${data.exit_code === 0 ? 'ok' : 'warn'}">${escapeHtml(out)}</span>\n`;
+    } else {
+      term.innerHTML += `<span class="dim">(aucune réponse)</span>\n`;
+    }
     term.innerHTML += `<span class="dim">[exit: ${data.exit_code}]</span>\n`;
-    term.scrollTop = term.scrollHeight;
   } catch (e) {
     term.innerHTML += `<span class="warn">[!] API error: ${e.message}</span>\n`;
-    term.scrollTop = term.scrollHeight;
   }
-
-  finishAttack(atk, sig);
+  term.scrollTop = term.scrollHeight;
+  // Détection : AUCUNE simulation ici. Les alertes n'apparaissent dans S1/S2 que
+  // si Suricata matche le trafic réel (flux reçu via le WebSocket fast.log).
 }
 
-// Demo mode: hardcoded output
-async function launchDemo(atk, sig) {
-  const term = document.getElementById('oida-term');
-  term.innerHTML += '\n';
-
-  for (let i = 0; i < atk.oida_output.length; i++) {
-    await sleep(60);
-    const line = atk.oida_output[i];
-    term.innerHTML += (line === '' ? '\n' : line + '\n');
-    term.scrollTop = term.scrollHeight;
-  }
-
-  finishAttack(atk, sig);
-}
-
-function finishAttack(atk, sig) {
-  const btn = document.getElementById('btn-launch');
-
-  // Trigger detection on blue side
-  atk.probes.forEach(probe => {
-    appendLog(probe, `\n<span class="log-ts">${ts()}</span>`);
-    appendLog(probe, `<span class="log-info">[capture] ${atk.proto} traffic — ${atk.name}</span>`);
-  });
-
-  sig.alerts.forEach((alert, i) => {
-    setTimeout(() => {
-      const probe = sig.probe;
-      const rules = injectedRules[probe] || [];
-      const matched = rules.some(r =>
-        r.sid === alert.sid || r.msg === alert.msg ||
-        (r.content && alert.msg.toLowerCase().includes(r.content.toLowerCase()))
-      );
-
-      if (matched) {
-        appendLog(probe, `<span class="log-alert">${ts()} [**] [1:${alert.sid}:1] ${alert.msg} [**] [Priority: 1]</span>`);
-        appendLog(probe, `<span class="log-ok">  ✓ DETECTED by rule SID:${alert.sid}</span>`);
-      } else {
-        appendLog(probe, `<span class="log-ts">${ts()} [traffic] ${atk.proto} packet — no matching rule</span>`);
-        appendLog(probe, `<span style="color:var(--orange)">  ✗ MISSED — no rule for: ${alert.msg}</span>`);
-      }
-
-      if (i === sig.alerts.length - 1) {
-        setTimeout(() => {
-          attackRunning = false;
-          btn.disabled = false;
-          btn.textContent = `Execute: ${ATTACKS.find(a=>a.id===selectedAttack).name}`;
-          appendLog(probe, `<span class="log-ts">${ts()} [end] Attack complete</span>`);
-        }, 200);
-      }
-    }, 400 * (i + 1));
-  });
-}
+// NOTE: launchDemo() and finishAttack() were removed. They fabricated OIDA output
+// and SIMULATED Suricata detection on button clicks (matched against locally parsed
+// rules). Detection is now driven ONLY by the real fast.log WebSocket stream, and
+// attack output comes ONLY from the backend (nothing shown if the command returns
+// nothing / is blocked by the firewall).
 
 
 // ====== Rules ======
