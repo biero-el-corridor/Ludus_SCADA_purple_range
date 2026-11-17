@@ -76,9 +76,52 @@ body {
   .workspace { flex-direction: column; overflow-y: auto; }
   .pane { width: 100% !important; min-height: 400px; }
 }
-.pane { display: flex; flex-direction: column; background: var(--bg); min-width: 0; }
+.pane { display: flex; flex-direction: column; background: var(--bg); min-width: 220px; }
 .pane-red { width: 38%; }
-.pane-blue { width: 62%; }
+.pane-blue { flex: 1; width: auto; }
+
+/* Theme toggle button */
+.theme-toggle {
+  font-family: var(--mono); font-size: 11px; font-weight: 600;
+  padding: 3px 9px; border-radius: 4px; cursor: pointer;
+  background: var(--surface-alt); color: var(--fg-muted);
+  border: 1px solid var(--border);
+}
+.theme-toggle:hover { color: var(--fg); border-color: var(--fg-dim); }
+
+/* Draggable vertical divider between the two main panes */
+.pane-resizer {
+  flex: 0 0 5px; cursor: col-resize; background: var(--border);
+  position: relative; transition: background 0.12s;
+}
+.pane-resizer:hover, .pane-resizer.dragging { background: var(--blue); }
+.pane-resizer::after {
+  content: ""; position: absolute; top: 50%; left: 50%;
+  transform: translate(-50%,-50%); width: 2px; height: 26px;
+  border-radius: 2px; background: var(--fg-dim); opacity: 0.5;
+}
+@media (max-width: 780px) { .pane-resizer { display: none; } }
+
+/* Native vertical resize handles on content areas */
+.oida-term, .log { resize: vertical; overflow: auto; }
+
+/* Sponsors / thanks footer */
+.sponsors {
+  flex-shrink: 0; display: flex; align-items: center; justify-content: center;
+  gap: 14px; padding: 7px 12px; border-top: 1px solid var(--border);
+  background: var(--surface-alt);
+}
+.sponsors-label {
+  font-family: var(--mono); font-size: 10px; letter-spacing: 0.08em;
+  text-transform: uppercase; color: var(--fg-dim);
+}
+.sponsor-logo {
+  display: inline-flex; align-items: center;
+  background: #0c0e13; border: 1px solid var(--border); border-radius: 6px;
+  padding: 5px 12px; transition: border-color 0.12s;
+}
+.sponsor-logo:hover { border-color: var(--blue); }
+.sponsor-logo img { height: 18px; width: auto; display: block; }
 
 /* Pane header */
 .pane-hdr {
@@ -242,6 +285,7 @@ body {
     ICS Detection Console
   </h1>
   <div class="topbar-right">
+    <button id="theme-toggle" class="theme-toggle" onclick="toggleTheme()" title="Basculer thème clair / sombre">☀︎ Clair</button>
     <span class="mode-badge demo" id="mode-badge" onclick="toggleMode()" title="Click to switch mode">DEMO</span>
     <span><span class="dot" style="background:var(--green)"></span>Range</span>
     <span id="ts-clock" style="color:var(--fg-dim)"></span>
@@ -275,6 +319,9 @@ Waiting for command...</span></div>
     </div>
   </div>
 
+  <!-- draggable divider -->
+  <div class="pane-resizer" id="pane-resizer" title="Glisser pour redimensionner"></div>
+
   <!-- BLUE TEAM -->
   <div class="pane pane-blue">
     <div class="pane-hdr blue">
@@ -282,8 +329,8 @@ Waiting for command...</span></div>
       <span class="badge">IDS</span>
     </div>
     <div class="probe-nav">
-      <button class="probe-tab active" data-probe="s1" onclick="switchProbe('s1')">S1 — eth0.30 (L3↔L2)</button>
-      <button class="probe-tab" data-probe="s2" onclick="switchProbe('s2')">S2 — eth0.10 (L2↔L1)</button>
+      <button class="probe-tab active" data-probe="s1" onclick="switchProbe('s1')">S1 — ens19 (L3↔L2)</button>
+      <button class="probe-tab" data-probe="s2" onclick="switchProbe('s2')">S2 — ens21 (L2↔L1)</button>
     </div>
 
     <!-- Probe S1 -->
@@ -304,7 +351,7 @@ Waiting for command...</span></div>
             <span class="lbl"><span class="live-dot"></span>fast.log — S1 (L3↔L2)</span>
             <button class="btn-sm" onclick="clearLog('s1')">Clear</button>
           </div>
-          <div class="log-output" id="log-s1"><span class="log-info">[suricata] S1 engine started — af-packet eth0.30</span>
+          <div class="log-output" id="log-s1"><span class="log-info">[suricata] S1 engine started — af-packet ens19</span>
 <span class="log-info">[suricata] 0 custom rule(s) loaded</span>
 <span class="log-ts">Waiting for traffic...</span></div>
         </div>
@@ -329,7 +376,7 @@ Waiting for command...</span></div>
             <span class="lbl"><span class="live-dot"></span>fast.log — S2 (L2↔L1)</span>
             <button class="btn-sm" onclick="clearLog('s2')">Clear</button>
           </div>
-          <div class="log-output" id="log-s2"><span class="log-info">[suricata] S2 engine started — af-packet eth0.10</span>
+          <div class="log-output" id="log-s2"><span class="log-info">[suricata] S2 engine started — af-packet ens21</span>
 <span class="log-info">[suricata] 0 custom rule(s) loaded</span>
 <span class="log-ts">Waiting for traffic...</span></div>
         </div>
@@ -337,6 +384,13 @@ Waiting for command...</span></div>
     </div>
   </div>
 </div>
+
+<footer class="sponsors">
+  <span class="sponsors-label">Propulsé par / Remerciements</span>
+  <a class="sponsor-logo" href="https://ludus.cloud" target="_blank" rel="noopener" title="Ludus — ludus.cloud">
+    <img src="/static/ludus-logo.svg" alt="Ludus" />
+  </a>
+</footer>
 
 <script>
 // ==============================================
@@ -704,51 +758,44 @@ async function launchConnected(atk, source) {
 
 
 // ====== Rules ======
+// Honest push: the only source of truth is the backend response (rules_count
+// comes from `grep -c '^alert'` on the real file). No client-side rule parsing,
+// no fabricated "injected" list. Detection itself comes only from the live
+// fast.log WebSocket stream, so nothing fake is ever shown.
 async function injectRules(probe) {
   const textarea = document.getElementById('rules-' + probe);
   const text = textarea.value.trim();
   if (!text) return;
 
-  const rules = parseRules(text);
-  injectedRules[probe] = rules;
-
-  if (connectedMode) {
-    // Push to NGFW via API
-    try {
-      const r = await fetch(API_BASE + '/api/suricata/rules', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ probe, rules: text }),
-      });
-      const data = await r.json();
-      appendLog(probe, `\n<span class="log-ok">[suricata] ${data.rules_count} rule(s) pushed to NGFW — ${data.status}</span>`);
-      if (data.errors.length) data.errors.forEach(e => appendLog(probe, `<span class="warn">  ${e}</span>`));
-    } catch (e) {
-      appendLog(probe, `\n<span class="warn">[!] API error: ${e.message} — rules loaded locally only</span>`);
-    }
-  }
-
   appendLog(probe, `\n<span class="log-ts">${ts()}</span>`);
-  appendLog(probe, `<span class="log-ok">[suricata] ${rules.length} rule(s) injected</span>`);
-  rules.forEach(r => appendLog(probe, `<span class="log-info">  SID:${r.sid} — ${r.msg}</span>`));
+
+  if (!connectedMode) {
+    appendLog(probe, `<span class="warn">[!] Non connecté — règle non poussée. Passez en CONNECTED.</span>`);
+    return;
+  }
+
+  try {
+    const r = await fetch(API_BASE + '/api/suricata/rules', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ probe, rules: text }),
+    });
+    const data = await r.json();
+    if (data.errors && data.errors.length) {
+      appendLog(probe, `<span class="warn">[suricata] échec push (${data.status})</span>`);
+      data.errors.forEach(e => appendLog(probe, `<span class="warn">  ${e}</span>`));
+    } else {
+      appendLog(probe, `<span class="log-ok">[suricata] ${data.rules_count} règle(s) poussée(s) sur le NGFW — ${data.status}</span>`);
+      appendLog(probe, `<span class="log-info">en attente de trafic réel pour déclencher les alertes…</span>`);
+    }
+  } catch (e) {
+    appendLog(probe, `<span class="warn">[!] Échec de l'appel API: ${e.message}</span>`);
+  }
 }
 
-function parseRules(text) {
-  const rules = [];
-  for (const line of text.split('\n')) {
-    const t = line.trim();
-    if (!t || t.startsWith('#')) continue;
-    const sidM = t.match(/sid\s*:\s*(\d+)/);
-    const msgM = t.match(/msg\s*:\s*"([^"]+)"/);
-    const cntM = t.match(/content\s*:\s*(?:"([^"]+)"|(\|[^|]+\|))/);
-    rules.push({
-      sid: sidM ? parseInt(sidM[1]) : Math.floor(Math.random() * 9000 + 1000),
-      msg: msgM ? msgM[1] : 'Unnamed rule',
-      content: cntM ? (cntM[1] || cntM[2]) : null,
-    });
-  }
-  return rules;
-}
+// parseRules() removed — it counted every textarea LINE as a rule, so the 5
+// multi-line S7 rules were reported as ~62 fake "Unnamed rule" entries with
+// random SIDs. The real rule count now comes from the backend.
 
 function clearRules(probe) {
   document.getElementById('rules-' + probe).value = '';
@@ -815,7 +862,48 @@ function updateClock() {
 }
 
 
+// ====== Theme ======
+function applyTheme(t) {
+  document.documentElement.setAttribute('data-theme', t);
+  const btn = document.getElementById('theme-toggle');
+  if (btn) btn.textContent = t === 'light' ? '☾ Sombre' : '☀︎ Clair';
+  try { localStorage.setItem('ics-theme', t); } catch (e) {}
+}
+function toggleTheme() {
+  const cur = document.documentElement.getAttribute('data-theme') || 'light';
+  applyTheme(cur === 'light' ? 'dark' : 'light');
+}
+
+// ====== Resizable main split (drag the divider) ======
+function initPaneResizer() {
+  const resizer = document.getElementById('pane-resizer');
+  const red = document.querySelector('.pane-red');
+  const ws = document.querySelector('.workspace');
+  if (!resizer || !red || !ws) return;
+  let dragging = false;
+  const onMove = (e) => {
+    if (!dragging) return;
+    const rect = ws.getBoundingClientRect();
+    const x = (e.touches ? e.touches[0].clientX : e.clientX) - rect.left;
+    const pct = Math.min(80, Math.max(20, (x / rect.width) * 100));
+    red.style.width = pct + '%';
+    e.preventDefault();
+  };
+  const stop = () => { dragging = false; resizer.classList.remove('dragging'); document.body.style.userSelect = ''; };
+  const start = (e) => { dragging = true; resizer.classList.add('dragging'); document.body.style.userSelect = 'none'; e.preventDefault(); };
+  resizer.addEventListener('mousedown', start);
+  resizer.addEventListener('touchstart', start, { passive: false });
+  window.addEventListener('mousemove', onMove);
+  window.addEventListener('touchmove', onMove, { passive: false });
+  window.addEventListener('mouseup', stop);
+  window.addEventListener('touchend', stop);
+}
+
 // ====== Init ======
+let savedTheme = 'light';
+try { savedTheme = localStorage.getItem('ics-theme') || 'light'; } catch (e) {}
+applyTheme(savedTheme);
+initPaneResizer();
 renderAttacks();
 updateClock();
 setInterval(updateClock, 1000);

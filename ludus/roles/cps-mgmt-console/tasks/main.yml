@@ -102,6 +102,12 @@
     dest: /opt/cps-console/static/index.html
     owner: "{{ console_user }}"
 
+- name: Deploy sponsor logo (Ludus)
+  copy:
+    src: ludus-logo.svg
+    dest: /opt/cps-console/static/ludus-logo.svg
+    owner: "{{ console_user }}"
+
 - name: Deploy systemd unit
   template:
     src: cps-console.service.j2

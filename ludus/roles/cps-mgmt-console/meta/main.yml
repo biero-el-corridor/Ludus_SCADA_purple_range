@@ -1,0 +1,13 @@
+---
+galaxy_info:
+  role_name: cps_mgmt_console
+  author: cps-purple-range
+  description: CPS/SCADA purple range role (cps-mgmt-console)
+  license: MIT
+  min_ansible_version: "2.12"
+  platforms:
+    - name: Debian
+      versions:
+        - bookworm
+        - trixie
+dependencies: []

@@ -67,6 +67,69 @@
     mode: '0755'
   loop: "{{ suricata_interfaces }}"
 
+# Suricata runs as root and writes fast.log as root:root 0644 — but it is
+# re-created on each restart, so a one-shot chmod is not enough. Give the
+# console SSH user (suricata-mgmt) a recursive ACL *and* a default ACL so every
+# future fast.log is readable; without this the /ws/logs tail -f fails silently
+# and no alert ever reaches the monitor UI.
+- name: Install acl (for Suricata log read access)
+  apt:
+    name: acl
+    state: present
+
+- name: Grant {{ suricata_mgmt_user }} read access to Suricata logs (recursive + default ACL)
+  ansible.builtin.shell: |
+    setfacl -R  -m u:{{ suricata_mgmt_user }}:rX /var/log/suricata
+    setfacl -R -d -m u:{{ suricata_mgmt_user }}:rX /var/log/suricata
+  changed_when: true
+  # First line = ACL on existing files/dirs; second = default ACL so every
+  # future fast.log inherits read access (Suricata re-creates it as root:root
+  # on each restart). Without this, the /ws/logs tail -f fails silently.
+
+# The Ludus router firewall has an INPUT rule rejecting SSH from the whole lab
+# (ip saddr 10.x.0.0/16 tcp dport 22 reject), so the management console cannot
+# SSH the NGFW to push rules / reload / tail logs. Allow the mgmt VLAN (where
+# the console lives) to reach the router's own :22, inserted BEFORE that reject.
+- name: Determine mgmt subnet (VLAN 99) allowed to SSH the NGFW
+  ansible.builtin.set_fact:
+    console_ssh_source: >-
+      {{ (ansible_all_ipv4_addresses | select('match', '^10\\..*\\.99\\.') | first | default('10.1.99.254')).split('.')[0:3] | join('.') }}.0/24
+
+- name: Deploy helper that allows the console to SSH the NGFW (idempotent)
+  ansible.builtin.copy:
+    dest: /usr/local/sbin/ngfw-allow-console-ssh.sh
+    mode: '0755'
+    content: |
+      #!/bin/sh
+      # Insert an ACCEPT for mgmt->router:22 before the lab-wide SSH reject.
+      SRC="$1"
+      iptables -C INPUT -s "$SRC" -p tcp --dport 22 -j ACCEPT 2>/dev/null \
+        || iptables -I INPUT -s "$SRC" -p tcp --dport 22 -j ACCEPT
+
+- name: Deploy systemd unit to persist the console SSH allowance across reboots
+  ansible.builtin.copy:
+    dest: /etc/systemd/system/ngfw-console-ssh.service
+    content: |
+      [Unit]
+      Description=Allow the mgmt console to SSH the NGFW (insert before lab reject)
+      After=network-online.target
+      Wants=network-online.target
+
+      [Service]
+      Type=oneshot
+      RemainAfterExit=yes
+      ExecStart=/usr/local/sbin/ngfw-allow-console-ssh.sh {{ console_ssh_source }}
+
+      [Install]
+      WantedBy=multi-user.target
+
+- name: Enable and (re)start the console SSH allowance now
+  ansible.builtin.systemd:
+    name: ngfw-console-ssh.service
+    enabled: true
+    state: restarted
+    daemon_reload: true
+
 - name: Create custom rules directory (writable by the mgmt user)
   file:
     path: "{{ suricata_rules_dir }}"
@@ -83,6 +146,18 @@
     group: suricata
     mode: '0664'
     force: false
+  loop: "{{ suricata_interfaces }}"
+
+# Self-heal: if the files were edited as root (tee from the console would then
+# fail with Permission denied), force ownership/mode back without touching
+# content (force:false above keeps pushed rules intact).
+- name: Ensure custom rules files stay writable by the console user
+  file:
+    path: "{{ suricata_rules_dir }}/custom_{{ item.name }}.rules"
+    owner: "{{ suricata_mgmt_user }}"
+    group: suricata
+    mode: '0664'
+    state: file
   loop: "{{ suricata_interfaces }}"
 
 - name: Deploy Suricata config for each probe instance

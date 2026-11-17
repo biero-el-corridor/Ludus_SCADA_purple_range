@@ -44,15 +44,23 @@
   args:
     creates: "{{ oida_install_dir }}/venv/bin/activate"
 
-- name: Install OIDA and ICS protocol libraries
+# Install oida-ics[all] FIRST and alone, then the extras. Pinning python-snap7
+# <2.0 next to oida-ics[all] sends pip into endless backtracking (the <2.0
+# constraint conflicts with oida's own requirement) — the deploy appears to
+# "hang" on this task. Let oida-ics[all] pull the snap7 version it wants.
+- name: Install OIDA framework
+  pip:
+    name: "oida-ics[all]"
+    virtualenv: "{{ oida_install_dir }}/venv"
+    extra_args: "--no-cache-dir"
+
+- name: Install extra ICS protocol libraries for OIDA
   pip:
     name:
-      - "oida-ics[all]"
-      - "python-snap7>=1.3,<2.0"
       - opcua
-      - pymodbus
       - cryptography
     virtualenv: "{{ oida_install_dir }}/venv"
+    extra_args: "--no-cache-dir"
 
 - name: Create OIDA wrapper script
   copy:

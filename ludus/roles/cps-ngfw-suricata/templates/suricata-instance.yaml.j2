@@ -8,6 +8,21 @@ vars:
     HOME_NET: "[10.0.0.0/8]"
     EXTERNAL_NET: "!$HOME_NET"
     ICS_NET: "[10.0.0.0/8]"
+    # Server groups referenced by generic IT/ET rulesets. Defined (= HOME_NET)
+    # so that, if the ET ruleset is ever enabled, rules don't get disabled with
+    # "unknown dest address var" warnings flooding suricata.log.
+    HTTP_SERVERS: "$HOME_NET"
+    SMTP_SERVERS: "$HOME_NET"
+    SQL_SERVERS: "$HOME_NET"
+    DNS_SERVERS: "$HOME_NET"
+    TELNET_SERVERS: "$HOME_NET"
+    DNP3_SERVER: "$HOME_NET"
+    DNP3_CLIENT: "$HOME_NET"
+    MODBUS_SERVER: "$HOME_NET"
+    MODBUS_CLIENT: "$HOME_NET"
+    ENIP_SERVER: "$HOME_NET"
+    ENIP_CLIENT: "$HOME_NET"
+    AIM_SERVERS: "$HOME_NET"
 
   port-groups:
     MODBUS_PORT: "502"
@@ -55,7 +70,12 @@ af-packet:
 default-rule-path: /var/lib/suricata/rules
 
 rule-files:
-  - suricata.rules
+  # ICS purple lab: load ONLY the rules pushed from the management console.
+  # The full Emerging Threats ruleset (suricata.rules) is intentionally NOT
+  # loaded — it's tens of thousands of IT/web rules irrelevant here, and it
+  # floods suricata.log with "unknown address var" warnings. Re-enable the
+  # line below if you want the generic ET coverage as well.
+  # - suricata.rules
   # One custom file per probe. The management console writes exactly this
   # path (custom_s1.rules / custom_s2.rules), so what is pushed is loaded.
   - {{ suricata_rules_dir }}/custom_{{ item.name }}.rules
